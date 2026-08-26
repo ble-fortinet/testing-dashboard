@@ -1,0 +1,298 @@
+/*
+ * Layout and component patterns specific to this dashboard, built on top of
+ * the tokens/classes in ./tokens.css (see /home/ble/Downloads/design-system/README.md
+ * for the source system this traces back to). No colors, fonts, radii, or
+ * spacing values here that don't resolve to a --ds-* token.
+ */
+
+:root {
+  /* Project-specific extension, not part of the shared design-system tokens.css —
+     that file stays a clean mirror of /home/ble/Downloads/design-system/tokens.css.
+     Pass/fail row shading, at the user's request. --ds-error-bg (from tokens.css)
+     covers the red side; --ds-green-bg is its counterpart, same lightness so the
+     two tints read as a pair. --ds-green is the solid fill for the PASS badge —
+     same hue family as --ds-green-bg, dark enough to stay legible sitting on top
+     of that tint rather than blending into it. */
+  --ds-green: #1E7B34;
+  --ds-green-bg: #EAF5EC;
+  /* wider left inset than --ds-space-5 gives — the panel sits flush against
+     the viewport edge (no auto-centering), so it needs more room to breathe
+     on that side specifically than the token scale's largest step provides. */
+  --ds-space-6: 64px;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ds-paper);
+}
+* {
+  box-sizing: border-box;
+}
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============ header ============ */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3) var(--ds-space-6);
+  border-bottom: 1px solid var(--ds-rule);
+}
+.app-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.app-eyebrow-accent {
+  color: var(--ds-red);
+}
+.app-title {
+  margin: 0;
+}
+.app-nav {
+  display: flex;
+  gap: var(--ds-space-1);
+}
+/* ds-chip is a button pattern by default; NavLink renders an <a>, and .ds-root a
+   carries its own red link styling — reassert the chip look at higher specificity
+   rather than fork a second nav-specific component. */
+.app-nav a.ds-chip {
+  display: inline-block;
+  color: var(--ds-ink);
+  border: 1px solid var(--ds-rule-strong);
+}
+.app-nav a.ds-chip:hover {
+  color: var(--ds-ink);
+  border-color: var(--ds-ink);
+}
+.app-nav a.ds-chip.is-selected {
+  background: var(--ds-ink);
+  border-color: var(--ds-ink);
+  color: var(--ds-paper);
+}
+
+/* ============ main / page ============ */
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  padding: var(--ds-space-5) var(--ds-space-6);
+}
+.page-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin-bottom: var(--ds-space-3);
+}
+.page-title {
+  margin: 0;
+}
+.page-lede {
+  max-width: 68ch;
+  color: var(--ds-muted);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.page-lede code {
+  font-family: var(--ds-font-mono);
+  font-size: .92em;
+  background: var(--ds-surface-muted);
+  padding: 1px 5px;
+}
+
+.ds-banner-info {
+  margin-bottom: var(--ds-space-4);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.ds-banner-info code {
+  font-family: var(--ds-font-mono);
+  font-size: .92em;
+}
+
+/* ============ table card ============ */
+.table-card {
+  overflow: hidden;
+}
+.table-card-title {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-rule);
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  text-align: left;
+  white-space: nowrap;
+  padding: var(--ds-space-2) var(--ds-space-2);
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ds-muted);
+  border-bottom: 1px solid var(--ds-ink);
+}
+.data-table th .col-note {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--ds-font-body);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ds-disabled-text);
+}
+.data-table td {
+  padding: var(--ds-space-2);
+  border-bottom: 1px solid var(--ds-divider-light);
+  font-size: 14px;
+  color: var(--ds-ink);
+  vertical-align: top;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* whole-row pass/fail shading — keyed off the row's overall status, not
+   individual grade cells. Flaky rows are intentionally left unshaded: a case
+   that passes 2 of 3 is flaky, not passing, so it gets neither tint. */
+.row-pass {
+  background: var(--ds-green-bg);
+}
+.row-fail {
+  background: var(--ds-error-bg);
+}
+
+.empty-state {
+  margin: var(--ds-space-2) 0;
+  padding: var(--ds-space-4);
+  border: 1px dashed var(--ds-rule-strong);
+  background: var(--ds-surface-muted);
+  text-align: center;
+  font-family: var(--ds-font-mono);
+  font-size: 11.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ds-disabled-text);
+}
+
+/* muted variant of .ds-badge — for placeholder values, not real signal yet */
+.ds-badge-muted {
+  display: inline-block;
+  font-family: var(--ds-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+  background: var(--ds-surface-muted);
+  color: var(--ds-disabled-text);
+  border-radius: var(--ds-radius);
+}
+/* success variant of .ds-badge — PASS / PASSED. Solid dark-green fill (not the
+   light --ds-green-bg row tint) so it stays legible whether it lands on a plain
+   white cell or on top of a .row-pass tinted row. */
+.ds-badge-success {
+  display: inline-block;
+  font-family: var(--ds-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+  background: var(--ds-green);
+  color: var(--ds-paper);
+  border-radius: var(--ds-radius);
+}
+
+/* outline variant of .ds-badge — a valid, non-primary outcome (e.g. "escalated"),
+   distinct from the solid-black primary badge and from the muted/placeholder one. */
+.ds-badge-outline {
+  display: inline-block;
+  font-family: var(--ds-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  padding: 2px 7px;
+  background: transparent;
+  border: 1px solid var(--ds-ink);
+  color: var(--ds-ink);
+  border-radius: var(--ds-radius);
+}
+
+/* blocking-signal failure — the one place a table cell earns red, per the
+   design system's "score/progress accents" accent role. Text only, not a
+   solid badge fill, so it doesn't compete with the black primary badge. */
+.grade-fail {
+  font-family: var(--ds-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--ds-red);
+}
+
+/* small red note appended to a card title to flag placeholder/fixture rows */
+.sample-flag {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: none;
+  color: var(--ds-red);
+}
+
+.mono-cell {
+  font-family: var(--ds-font-mono);
+  font-size: 13px;
+}
+.muted-cell {
+  color: var(--ds-muted);
+}
+.severity-cell {
+  text-transform: uppercase;
+  color: var(--ds-dimmed);
+  font-size: 11.5px;
+  letter-spacing: .04em;
+}
+.job-link {
+  font-family: var(--ds-font-mono);
+  font-size: 12.5px;
+}
+.flag-note {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ds-red);
+}
+
+/* ============ additional-views list (Logging page) ============ */
+.view-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-4);
+}
+.view-list li {
+  border: 1px solid var(--ds-rule);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  font-size: 13.5px;
+  color: var(--ds-dimmed);
+}

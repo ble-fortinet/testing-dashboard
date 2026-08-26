@@ -1,0 +1,19 @@
+# SAMPLE — placeholder shape only, not a real test case.
+# Real cases will be authored once the chatbot repo (region resolution logic,
+# actual policy topics, real HCM location/legal-entity values) is available.
+id: TC-0001
+category: leave
+severity: blocker
+input: "SAMPLE: How many weeks of parental leave am I entitled to?"
+persona:
+  work_location: "SAMPLE — e.g. Quebec office code"
+  legal_entity: "SAMPLE — e.g. CA legal entity code"
+  notes: "Quebec must resolve distinctly from rest-of-Canada."
+expected:
+  key_facts:
+    - "SAMPLE — exact figure from the real policy doc"
+  must_escalate: false
+  must_cite: true
+deterministic_assertions:
+  - no_out_of_region_chunk
+  - citation_resolves

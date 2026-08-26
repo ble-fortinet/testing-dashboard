@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "test-case.schema.json",
+  "title": "HR Chatbot Test Case",
+  "type": "object",
+  "required": ["id", "category", "severity", "input", "persona", "expected"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^TC-[0-9]{4}$",
+      "description": "Stable ID. Never reused, even if the case is deleted."
+    },
+    "category": {
+      "type": "string",
+      "description": "e.g. leave, benefits, pay, region-boundary, escalation"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["blocker", "major", "minor"],
+      "description": "blocker cases are gated by deterministic assertions only."
+    },
+    "input": {
+      "type": "string",
+      "description": "The query sent to the bot."
+    },
+    "persona": {
+      "type": "object",
+      "required": ["work_location", "legal_entity"],
+      "properties": {
+        "work_location": { "type": "string" },
+        "legal_entity": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "description": "The HCM attributes the bot resolves region from."
+    },
+    "expected": {
+      "type": "object",
+      "required": ["key_facts"],
+      "properties": {
+        "key_facts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Facts checked by reference comparison, not prose similarity."
+        },
+        "must_escalate": { "type": "boolean" },
+        "must_cite": { "type": "boolean" }
+      }
+    },
+    "deterministic_assertions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "no_out_of_region_chunk",
+          "citation_resolves",
+          "escalation_fires_when_expected"
+        ]
+      }
+    }
+  }
+}

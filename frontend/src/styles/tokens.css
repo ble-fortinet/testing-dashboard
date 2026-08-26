@@ -1,0 +1,176 @@
+/*
+ * "Exaggerated Minimalism" — red/black design system for internal tools.
+ * Copied verbatim from /home/ble/Downloads/design-system/tokens.css — see that
+ * folder's README.md for palette rationale, type roles, and component patterns.
+ * Do not hand-edit token values here; change the source and re-copy.
+ */
+
+:root {
+  /* ---- Color ---- */
+  --ds-ink: #000000;          /* primary text, borders on light surfaces, primary buttons */
+  --ds-paper: #FFFFFF;        /* page background, card background */
+  --ds-muted: #6B6B6B;        /* secondary text, helper copy */
+  --ds-dimmed: #4A4A4A;       /* field labels, calm/awaiting-state headlines */
+  --ds-disabled-text: #999999;
+  --ds-rule: #E5E5E5;         /* default borders/dividers */
+  --ds-rule-strong: #CCCCCC; /* dashed borders, empty-state boxes */
+  --ds-divider-light: #EDEDED;
+  --ds-surface-muted: #F2F2F2; /* disabled chip fill, "no data" box fill */
+  --ds-info-bg: #F5F5F5;      /* neutral informational banner background */
+
+  --ds-red: #C8102E;          /* the one accent — see README "Accent discipline" */
+  --ds-red-hover: #96001C;
+  --ds-red-on-dark: #FF6B6B;  /* use instead of --ds-red for red text ON a black/dark surface — see README contrast note */
+  --ds-error-bg: #FBEAEA;
+
+  /* ---- Typography ---- */
+  --ds-font-display: 'Bebas Neue', sans-serif; /* oversized hero/section headlines only */
+  --ds-font-body: 'Source Sans 3', sans-serif; /* paragraphs, definitions, general UI text */
+  --ds-font-mono: 'IBM Plex Mono', monospace;  /* labels, eyebrows, card titles, codes, data */
+
+  /* ---- Shape / spacing ---- */
+  --ds-radius: 0;             /* deliberately square, everywhere */
+  --ds-space-1: 6px;
+  --ds-space-2: 12px;
+  --ds-space-3: 20px;
+  --ds-space-4: 26px;
+  --ds-space-5: 40px;
+}
+
+/* ============ base ============ */
+.ds-root {
+  background: var(--ds-paper);
+  color: var(--ds-ink);
+  font-family: var(--ds-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+.ds-root a { color: var(--ds-red); text-decoration: none; border-bottom: 1px solid rgba(200,16,46,.35); }
+.ds-root a:hover { color: var(--ds-red-hover); border-bottom-color: var(--ds-red-hover); }
+
+/* ============ headlines ============ */
+/* Hero: the one big loud moment per screen (a result title, a page name). Use once. */
+.ds-hero {
+  font-family: var(--ds-font-display);
+  font-weight: 400;
+  font-size: 64px;
+  line-height: .95;
+  letter-spacing: .005em;
+  text-transform: uppercase;
+}
+/* Section headline: still display face, still uppercase, meaningfully smaller than hero. */
+.ds-headline {
+  font-family: var(--ds-font-display);
+  font-weight: 400;
+  font-size: 38px;
+  line-height: 1.05;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+}
+/* Calm/status headline: an "awaiting input" or neutral prompt — must NOT compete with
+   the hero or section headlines. This is the fix for the over-bold first attempt:
+   normal case, body face, muted color. */
+.ds-headline-calm {
+  font-family: var(--ds-font-body);
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 1.3;
+  color: var(--ds-dimmed);
+}
+
+/* ============ card ============ */
+.ds-card {
+  border: 1px solid var(--ds-rule);
+  background: var(--ds-paper);
+  border-radius: var(--ds-radius);
+}
+.ds-card-title {
+  font-family: var(--ds-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ds-ink);
+}
+.ds-eyebrow {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ds-muted);
+}
+
+/* ============ buttons ============ */
+/* Primary actions stay black-on-white — see README "Accent discipline". */
+.ds-btn {
+  font-family: var(--ds-font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  border: 1px solid var(--ds-ink);
+  background: var(--ds-ink);
+  color: var(--ds-paper);
+  border-radius: var(--ds-radius);
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: opacity .16s ease;
+}
+.ds-btn:hover { opacity: .85; }
+.ds-btn:disabled { opacity: .35; cursor: default; }
+.ds-btn-ghost {
+  font-size: 11px;
+  border: 1px solid var(--ds-rule);
+  background: transparent;
+  color: var(--ds-muted);
+  border-radius: var(--ds-radius);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.ds-btn-ghost:hover { border-color: var(--ds-ink); color: var(--ds-ink); }
+
+/* ============ chips ============ */
+.ds-chip {
+  font-family: var(--ds-font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid var(--ds-rule-strong);
+  background: var(--ds-paper);
+  color: var(--ds-ink);
+  border-radius: var(--ds-radius);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.ds-chip:hover { border-color: var(--ds-ink); }
+.ds-chip.is-selected { background: var(--ds-ink); border-color: var(--ds-ink); color: var(--ds-paper); }
+.ds-chip.is-disabled {
+  background: var(--ds-surface-muted); color: var(--ds-disabled-text);
+  border-style: dashed; border-color: var(--ds-rule-strong);
+  text-decoration: line-through; cursor: default;
+}
+
+/* ============ badge ============ */
+.ds-badge {
+  display: inline-block;
+  font-family: var(--ds-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+  background: var(--ds-ink);
+  color: var(--ds-paper);
+  border-radius: var(--ds-radius);
+}
+
+/* ============ banners ============ */
+.ds-banner-error {
+  border-left: 3px solid var(--ds-red);
+  background: var(--ds-error-bg);
+  color: var(--ds-red-hover);
+  padding: 12px 16px;
+}
+.ds-banner-info {
+  border-left: 3px solid var(--ds-ink);
+  background: var(--ds-info-bg);
+  color: var(--ds-ink);
+  padding: 12px 16px;
+}
