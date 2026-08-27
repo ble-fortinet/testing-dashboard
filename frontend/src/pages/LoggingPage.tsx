@@ -8,6 +8,9 @@
  * system treatment is visible against real-shaped content. Replace with a fetch to
  * /api/logs once that route returns data — see docs/open-questions.md.
  */
+import { useState } from "react";
+import { PromoteDraftPanel } from "../components/PromoteDraftPanel.js";
+
 type Outcome = "answered" | "escalated" | "abstained";
 
 type SampleLogRow = {
@@ -51,6 +54,8 @@ function OutcomeBadge({ outcome }: { outcome: Outcome }) {
 }
 
 export function LoggingPage() {
+  const [selectedRow, setSelectedRow] = useState<SampleLogRow | null>(null);
+
   return (
     <section>
       <div className="page-head">
@@ -85,25 +90,48 @@ export function LoggingPage() {
                 <th>Resolved region</th>
                 <th>Outcome</th>
                 <th>Latency</th>
+                <th>
+                  Draft test case
+                  <span className="col-note">sample flow</span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {SAMPLE_ROWS.map((row) => (
-                <tr key={row.timestamp}>
-                  <td className="mono-cell muted-cell">{row.timestamp}</td>
-                  <td>
-                    {row.query}
-                    {row.flagged ? <span className="flag-note"> · flagged</span> : null}
-                  </td>
-                  <td className="mono-cell severity-cell">{row.region}</td>
-                  <td>
-                    <OutcomeBadge outcome={row.outcome} />
-                  </td>
-                  <td className="mono-cell">{row.latency}</td>
-                </tr>
-              ))}
+              {SAMPLE_ROWS.map((row) => {
+                const isSelected = selectedRow?.timestamp === row.timestamp;
+                return (
+                  <tr
+                    key={row.timestamp}
+                    className={`row-selectable${isSelected ? " row-selected" : ""}`}
+                    onClick={() => setSelectedRow(row)}
+                  >
+                    <td className="mono-cell muted-cell">{row.timestamp}</td>
+                    <td>
+                      {row.query}
+                      {row.flagged ? <span className="flag-note"> · flagged</span> : null}
+                    </td>
+                    <td className="mono-cell severity-cell">{row.region}</td>
+                    <td>
+                      <OutcomeBadge outcome={row.outcome} />
+                    </td>
+                    <td className="mono-cell">{row.latency}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ds-btn-ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRow(row);
+                        }}
+                      >
+                        {isSelected ? "Selected" : "Draft →"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               <tr>
-                <td colSpan={5}>
+                <td colSpan={6}>
                   <div className="empty-state">No further rows — log store not configured.</div>
                 </td>
               </tr>
@@ -111,6 +139,14 @@ export function LoggingPage() {
           </table>
         </div>
       </div>
+
+      {selectedRow && (
+        <PromoteDraftPanel
+          key={selectedRow.timestamp}
+          row={selectedRow}
+          onClose={() => setSelectedRow(null)}
+        />
+      )}
     </section>
   );
 }
