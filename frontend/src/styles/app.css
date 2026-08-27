@@ -280,6 +280,122 @@ html, body {
   color: var(--ds-red);
 }
 
+/* ============ selectable log rows -> promote-to-draft panel ============ */
+.row-selectable {
+  cursor: pointer;
+}
+.row-selectable:hover td {
+  background: var(--ds-surface-muted);
+}
+.row-selected td {
+  background: var(--ds-info-bg);
+}
+
+.promote-panel {
+  margin-top: var(--ds-space-4);
+}
+.promote-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.promote-panel-body {
+  padding: var(--ds-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.promote-panel-note {
+  margin-bottom: 0;
+}
+
+.promote-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--ds-space-3) var(--ds-space-2);
+}
+.promote-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.promote-field-wide {
+  grid-column: 1 / -1;
+}
+.promote-label {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ds-dimmed);
+}
+.promote-hint {
+  font-family: var(--ds-font-body);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ds-disabled-text);
+}
+.promote-input {
+  font-family: var(--ds-font-body);
+  font-size: 14px;
+  color: var(--ds-ink);
+  border: 1px solid var(--ds-rule-strong);
+  border-radius: var(--ds-radius);
+  background: var(--ds-paper);
+  padding: 8px 10px;
+}
+.promote-input:focus {
+  outline: none;
+  border-color: var(--ds-ink);
+}
+.promote-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ds-space-1);
+}
+.promote-key-fact-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin-bottom: var(--ds-space-1);
+}
+.promote-key-fact-row .promote-input {
+  flex: 1;
+}
+
+.promote-yaml-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.yaml-preview {
+  margin: 0;
+  padding: var(--ds-space-2);
+  border: 1px solid var(--ds-rule);
+  background: var(--ds-surface-muted);
+  font-family: var(--ds-font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.promote-error-list {
+  margin: var(--ds-space-1) 0 0;
+  padding-left: 18px;
+}
+
+.promote-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+}
+
 /* ============ additional-views list (Logging page) ============ */
 .view-list {
   margin: 0;
