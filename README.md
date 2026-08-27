@@ -38,7 +38,10 @@ docs/       Open questions / assumptions this skeleton makes
 4. Continue-conversation
 5. Promote-to-test with the scrub and MR flow
 
-Nothing past stage 0 (skeleton) is implemented yet.
+Nothing past stage 0 (skeleton) is fully implemented yet. The Logging page has a
+click-to-draft UI for stage 5 (promote-to-test), still operating on sample fixture rows
+and wired to the stub GitLab client; its scrub step (`POST /api/promote/scrub`) remains
+a 501 stub and is skipped in that flow.
 
 ## Running locally
 
