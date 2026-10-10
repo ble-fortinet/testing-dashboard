@@ -1,5 +1,13 @@
-node_modules/
-dist/
-*.tsbuildinfo
+# the dashboard's database holds test answers and run history: never commit one
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 .env
-.env.local
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+# Excel lock files while the test set is open
+~$*

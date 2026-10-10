@@ -1,0 +1,2 @@
+preact-htm.mjs is htm 3.1.1's preact/standalone.module.js (npm "htm"): htm (Apache-2.0, see LICENSE-htm.txt)
+bundled with Preact 10 (MIT, Copyright (c) 2015-present Jason Miller). Vendored unmodified; no build step.
