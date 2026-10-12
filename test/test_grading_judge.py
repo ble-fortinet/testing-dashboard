@@ -170,3 +170,11 @@ async def test_llm_errors():
         await llm3.complete([])
     for c in (llm, llm2, llm3):
         await c.aclose()
+
+
+def test_verdicts_for_an_empty_list_are_ignored():
+    # seen from the real judge: no MUST NOT items, yet "must_not": [false]
+    out = J.parse('{"points": ["covered"], "must_not": [false], "feedback": ""}', 1, 0)
+    assert out["points"] == ["covered"] and out["must_not"] == []
+    out = J.parse('{"points": ["covered"], "must_not": [true]}', 0, 1)
+    assert out["points"] == [] and out["must_not"] == [True]

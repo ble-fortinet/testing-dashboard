@@ -97,6 +97,8 @@ def parse(content: str, n_points: int, n_must: int) -> dict:
     mn = data.get("must_not") or []
     if not isinstance(pts, list) or not isinstance(mn, list):
         raise ValueError("points and must_not must be lists")
+    # an empty list has nothing to judge: real models still answer it ([false]), so ignore them
+    pts, mn = (pts if n_points else []), (mn if n_must else [])
     if len(pts) != n_points:
         raise ValueError(f"{len(pts)} point verdicts for {n_points} points")
     if len(mn) != n_must:
