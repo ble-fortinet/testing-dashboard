@@ -189,6 +189,45 @@ class Store:
             db.commit()
         return vid
 
+    def save_persona(self, persona: dict, columns: list[str], by: str, recheck) -> int:
+        """Insert or update one persona, then re-check every case against the new set of logins
+        (a case naming a persona that now exists becomes runnable). `recheck(case, logins)`
+        returns a case's issues."""
+        login = persona["USERLOGIN"]
+        with self.lock, closing(self._db()) as db:
+            row = db.execute("SELECT pos FROM personas WHERE login = ?", (login,)).fetchone()
+            if row:
+                db.execute("UPDATE personas SET data = ? WHERE login = ?", (json.dumps(persona), login))
+            else:
+                pos = db.execute("SELECT coalesce(max(pos), -1) + 1 FROM personas").fetchone()[0]
+                db.execute(
+                    "INSERT INTO personas (login, pos, data) VALUES (?, ?, ?)", (login, pos, json.dumps(persona))
+                )
+            if not self._meta_in(db, "persona_columns", []):
+                self._set_meta(db, "persona_columns", list(columns))
+            self._recheck(db, recheck)
+            vid = self._version(db, by, "edit", f"{'edited' if row else 'added'} persona {login}")
+            db.commit()
+        return vid
+
+    def delete_persona(self, login: str, by: str, recheck) -> int | None:
+        with self.lock, closing(self._db()) as db:
+            if not db.execute("DELETE FROM personas WHERE login = ?", (login,)).rowcount:
+                return None
+            self._recheck(db, recheck)
+            vid = self._version(db, by, "edit", f"deleted persona {login}")
+            db.commit()
+        return vid
+
+    @staticmethod
+    def _recheck(db: sqlite3.Connection, recheck) -> None:
+        logins = {r["login"] for r in db.execute("SELECT login FROM personas")}
+        for r in db.execute("SELECT id, data FROM cases").fetchall():
+            c = json.loads(r["data"])
+            issues = recheck(c, logins)
+            if issues != c.get("issues"):  # issues are derived: not an edit, nothing for an import to warn about
+                db.execute("UPDATE cases SET data = ? WHERE id = ?", (json.dumps({**c, "issues": issues}), r["id"]))
+
     def versions(self, limit: int = 200) -> list[dict]:
         with closing(self._db()) as db:
             rows = db.execute(
@@ -286,14 +325,38 @@ class Store:
         return self.run(row["id"]) if row else None
 
     def previous_judged_run(self, run_id: int) -> int | None:
-        """The most recent completed run before this one — the baseline for regressions. A
-        cancelled or interrupted run covers only part of the set, so it never serves."""
+        """The most recent completed full run before this one — the baseline for regressions. A
+        cancelled or interrupted run, or a re-run of a few cases, covers only part of the set, so
+        it never serves."""
         with closing(self._db()) as db:
             row = db.execute(
-                "SELECT id FROM runs WHERE id < ? AND kind = 'run' AND status = 'done' ORDER BY id DESC LIMIT 1",
+                "SELECT id FROM runs WHERE id < ? AND kind = 'run' AND status = 'done'"
+                " AND json_extract(params, '$.scope') = 'ready' ORDER BY id DESC LIMIT 1",
                 (run_id,),
             ).fetchone()
         return row["id"] if row else None
+
+    def reruns_after(self, run_id: int) -> dict[str, list[dict]]:
+        """For each case, every attempt from the newest partial run (a re-run, a category or a
+        hand-picked set) after this one, so a full run's page can show what changed since
+        without restating the run's own numbers."""
+        with closing(self._db()) as db:
+            rows = db.execute(
+                "SELECT r.id, r.run_id, r.data, r.created_at FROM results r JOIN runs u ON u.id = r.run_id"
+                " WHERE r.run_id > ? AND r.phase IS NULL AND json_extract(u.params, '$.scope') != 'ready'"
+                " ORDER BY r.run_id, r.id",
+                (run_id,),
+            ).fetchall()
+        out: dict[str, list[dict]] = {}
+        for r in rows:
+            d = json.loads(r["data"])
+            prev = out.get(d["case_id"])
+            if prev and prev[0]["run_id"] != r["run_id"]:  # a newer run replaces an older one's attempts
+                prev = None
+            out[d["case_id"]] = (prev or []) + [
+                {**d, "result_id": r["id"], "run_id": r["run_id"], "at": r["created_at"]}
+            ]
+        return out
 
     def add_result(self, run_id: int, r: dict) -> int:
         with self.lock, closing(self._db()) as db:

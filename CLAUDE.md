@@ -1,6 +1,7 @@
 # testing-dashboard — working notes
 
 Read `PLAN.md` first (what and why), then `CONTRACT.md` (what the platform needs).
+**On the Linux desktop, start with `PLAN.md` § TODO** — the open work and the questions to ask Ben.
 `CHATBOT-WORK-ORDER.md` is for a session in the chatbot repo, not this one.
 
 Ben's standing rules apply (in `hr-server/CLAUDE.md` on the desktop, `src/tools/CLAUDE.md` on
@@ -12,7 +13,8 @@ the laptop): plan first and wait for go; never commit without asking; no Claude 
 `judge.py` (prompt, parsing, OpenAI-compatible client) · `grading.py` (checks + outcome) ·
 `stats.py` (overview, signals, audit) · `workbook.py` (import, export, roster CSV) ·
 `store.py` (SQLite) · `chatbot.py` · `secrets.py` (FortiPAM) · `regions.py` · `static/`
-(Preact + htm, vendored from JAT, no build). `make check` is the gate.
+(Preact + htm, vendored from JAT, no build; `app.js` is the whole UI). `make check` is
+the gate.
 
 ## Things that will bite
 
@@ -31,6 +33,11 @@ the laptop): plan first and wait for go; never commit without asking; no Claude 
   carries a number not in the code-computed finding.
 - **An infrastructure failure is `error`, not `fail`.** Retried once; 401/403 aren't.
 - **Saving an unchanged case is not an edit** — no version, nothing for an import to "undo".
+  The same holds for personas.
+- **The static cache key is computed at startup** (`?v=` from file mtimes). Edit
+  `static/` with a server running and the browser keeps the old file: restart it.
+- **Fonts are self-hosted** (`static/vendor/fonts`, OFL). The front door's CSP allows
+  fonts from `'self'` only; a Google Fonts link would silently fall back.
 
 ## Testing
 

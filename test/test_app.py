@@ -1,11 +1,9 @@
-import io
 import json
 import time
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from openpyxl import load_workbook
 
 from tdash.app import create_app
 from tdash.config import Config
@@ -183,6 +181,41 @@ def test_saving_an_unchanged_case_is_not_an_edit(client, seed_bytes):
     assert pre["diff"]["cases"]["reverts_in_app_edits"] == []
 
 
+def test_personas_add_edit_delete(client, seed_bytes):
+    imported(client, seed_bytes)
+    v0 = client.get(f"{B}/api/versions", headers=ADMIN).json()["current"]
+    # a case naming a persona that doesn't exist yet is kept, flagged, and fixed by adding it
+    case = client.post(
+        f"{B}/api/cases", headers=ADMIN, json={"persona": "test-ca-nb", "question": "q", "expected": "x"}
+    )
+    assert "not on the Personas sheet" in case.json()["issues"][0]
+    add = client.post(
+        f"{B}/api/personas", headers=ADMIN, json={"USERLOGIN": "test-ca-nb", "STATE": "NB", "HIREDATE": "-5d"}
+    )
+    assert add.status_code == 200, add.text
+    after = {c["id"]: c for c in client.get(f"{B}/api/cases", headers=ADMIN).json()["cases"]}
+    assert after[case.json()["id"]]["issues"] == []
+    assert client.post(f"{B}/api/personas", headers=ADMIN, json={"USERLOGIN": "test-ca-nb"}).status_code == 409
+    assert client.post(f"{B}/api/personas", headers=ADMIN, json={"USERLOGIN": "JSMITH"}).status_code == 400
+    ed = client.put(f"{B}/api/personas/test-ca-nb", headers=ADMIN, json={"LOCATION": "Canada - Remote"})
+    assert ed.json()["LOCATION"] == "Canada - Remote" and ed.json()["STATE"] == "NB"  # merged, not replaced
+    assert client.put(f"{B}/api/personas/test-ca-nb", headers=ADMIN, json={"USERLOGIN": "test-x"}).status_code == 400
+    n = client.get(f"{B}/api/versions", headers=ADMIN).json()["current"]
+    client.put(f"{B}/api/personas/test-ca-nb", headers=ADMIN, json={"LOCATION": "Canada - Remote"})
+    assert client.get(f"{B}/api/versions", headers=ADMIN).json()["current"] == n  # unchanged save: no version
+    # in use: refused, with who uses it
+    assert "1 case(s)" in client.delete(f"{B}/api/personas/test-ca-nb", headers=ADMIN).json()["detail"]
+    client.delete(f"{B}/api/cases/{case.json()['id']}", headers=ADMIN)
+    client.post(f"{B}/api/personas", headers=ADMIN, json={"USERLOGIN": "test-ca-sub", "MGRLVL1": "test-ca-nb"})
+    assert "test-ca-sub report(s) to" in client.delete(f"{B}/api/personas/test-ca-nb", headers=ADMIN).json()["detail"]
+    assert client.delete(f"{B}/api/personas/test-ca-sub", headers=ADMIN).status_code == 200
+    assert client.delete(f"{B}/api/personas/test-ca-nb", headers=ADMIN).status_code == 200
+    assert client.delete(f"{B}/api/personas/test-ca-nb", headers=ADMIN).status_code == 404
+    assert client.get(f"{B}/api/versions", headers=ADMIN).json()["current"] == v0 + 7
+    roster = client.get(f"{B}/api/export/test-roster.csv", headers=ADMIN).text
+    assert "test-ca-nb" not in roster
+
+
 # ---------------------------------------------------------------- runs
 def test_run_lifecycle(client, seed_bytes, fakes):
     imported(client, seed_bytes)
@@ -195,9 +228,7 @@ def test_run_lifecycle(client, seed_bytes, fakes):
     assert run["info"]["chatbot_commit"] == "abc1234" and run["created_by"] == "ble"
     rs = client.get(f"{B}/api/runs/{run['id']}/results", headers=ADMIN).json()["results"]
     assert len(rs) == 65 and all(r["case"]["question"] for r in rs)
-    x = client.get(f"{B}/api/runs/{run['id']}/export", headers=ADMIN)
-    wb = load_workbook(io.BytesIO(x.content))
-    assert wb.sheetnames == ["Results", "Summary"] and wb["Results"].max_row == 66
+    assert client.get(f"{B}/api/runs/{run['id']}/export", headers=ADMIN).status_code == 404  # results don't leave
     assert client.post(f"{B}/api/runs/{run['id']}/cancel", headers=ADMIN).status_code == 409
     assert client.get(f"{B}/api/runs/999", headers=ADMIN).status_code == 404
     runs = client.get(f"{B}/api/runs", headers=ADMIN).json()["runs"]
@@ -205,6 +236,50 @@ def test_run_lifecycle(client, seed_bytes, fakes):
     # the second run is compared with the first
     second = wait(client, client.post(f"{B}/api/runs", headers=ADMIN, json={}).json()["id"])
     assert second["baseline_run"] == run["id"] and second["overview"]["has_baseline"]
+
+
+def test_rerun_one_case(client, seed_bytes):
+    imported(client, seed_bytes)
+    full = wait(client, client.post(f"{B}/api/runs", headers=ADMIN, json={}).json()["id"])
+    cid = client.get(f"{B}/api/runs/{full['id']}/results", headers=ADMIN).json()["results"][0]["case_id"]
+    assert client.get(f"{B}/api/runs/{full['id']}/reruns", headers=ADMIN).json() == {"reruns": {}}
+    one = client.post(f"{B}/api/cases/{cid}/rerun", headers=ADMIN)
+    assert one.status_code == 200, one.text
+    one = wait(client, one.json()["id"])
+    assert one["done"] == 1 and one["audit"] is None  # no audit for a re-run
+    rr = client.get(f"{B}/api/runs/{full['id']}/reruns", headers=ADMIN).json()["reruns"]
+    assert list(rr) == [cid] and rr[cid]["run_id"] == one["id"] and rr[cid]["status"] in ("pass", "fail")
+    assert rr[cid]["attempts"] == 1
+    # a re-run is never the baseline: the next full run compares with the last full one
+    nxt = wait(client, client.post(f"{B}/api/runs", headers=ADMIN, json={}).json()["id"])
+    assert nxt["baseline_run"] == full["id"]
+    assert client.post(f"{B}/api/cases/TC-NOPE/rerun", headers=ADMIN).status_code == 404
+
+
+def test_a_repeated_partial_run_counts_every_attempt(client, seed_bytes, fakes):
+    imported(client, seed_bytes)
+    full = wait(client, client.post(f"{B}/api/runs", headers=ADMIN, json={}).json()["id"])
+    cid = client.get(f"{B}/api/runs/{full['id']}/results", headers=ADMIN).json()["results"][0]["case_id"]
+    _, judge = fakes
+    judge.contradict = 1  # the first of the three attempts fails
+    body = {"scope": "ids", "ids": [cid], "repeats": 3, "concurrency": 1}
+    rid = client.post(f"{B}/api/runs", headers=ADMIN, json=body).json()["id"]
+    wait(client, rid)
+    rr = client.get(f"{B}/api/runs/{full['id']}/reruns", headers=ADMIN).json()["reruns"][cid]
+    assert rr["attempts"] == 3 and rr["passed_attempts"] == 2 and rr["status"] == "fail"
+
+
+def test_rerun_refuses_a_draft_and_waits_its_turn(client, seed_bytes, fakes):
+    imported(client, seed_bytes)
+    draft = next(c for c in client.get(f"{B}/api/cases", headers=ADMIN).json()["cases"] if c["status"] != "ready")
+    assert client.post(f"{B}/api/cases/{draft['id']}/rerun", headers=ADMIN).status_code == 400
+    bot, _ = fakes
+    bot.delay = 0.2
+    rid = client.post(f"{B}/api/runs", headers=ADMIN, json={"concurrency": 1}).json()["id"]
+    ready = next(c for c in client.get(f"{B}/api/cases", headers=ADMIN).json()["cases"] if c["status"] == "ready")
+    assert client.post(f"{B}/api/cases/{ready['id']}/rerun", headers=ADMIN).status_code == 409
+    client.post(f"{B}/api/runs/{rid}/cancel", headers=ADMIN)
+    wait(client, rid)
 
 
 def test_busy_blocks_runs_imports_and_rollbacks(client, seed_bytes, fakes):
@@ -275,6 +350,30 @@ def test_secret_failure_stops_the_boot(tmp_path):
 
 
 # ---------------------------------------------------------------- playground
+def test_playground_sends_history_once_w3_is_on(tmp_path, fakes, seed_bytes):
+    bot, judge = fakes
+    app = create_app(cfg(tmp_path, chatbot_history=True), env={}, chatbot_transport=httpx.MockTransport(bot.handler),
+                     judge_transport=httpx.MockTransport(judge.handler))  # fmt: skip
+    with TestClient(app) as c:
+        imported(c, seed_bytes)
+        hist = [{"role": "user", "text": "first"}, {"role": "assistant", "text": "reply"}]
+        ok = c.post(
+            f"{B}/api/playground", headers=ADMIN, json={"persona": "test-ca-qc", "text": "and?", "history": hist}
+        )
+        assert ok.json()["history_supported"] is True
+        assert bot.calls[-1] == {"sender": "test-ca-qc", "text": "and?", "history": hist}
+
+
+def test_run_carries_the_baseline_pass_rate_and_state_the_region_map(client, seed_bytes):
+    imported(client, seed_bytes)
+    one = wait(client, client.post(f"{B}/api/runs", headers=ADMIN, json={}).json()["id"])
+    assert one["baseline_pass_rate"] is None
+    two = wait(client, client.post(f"{B}/api/runs", headers=ADMIN, json={}).json()["id"])
+    assert two["baseline_pass_rate"] == one["overview"]["pass_rate"]
+    regions = client.get(f"{B}/api/state", headers=ADMIN).json()["regions"]
+    assert regions["CA"] == "hrcanada" and regions["US"] == "hrus" and "JP" not in regions
+
+
 def test_playground(client, seed_bytes, fakes):
     bot, _ = fakes
     imported(client, seed_bytes)
@@ -289,7 +388,7 @@ def test_playground(client, seed_bytes, fakes):
     hist = [{"role": "user", "text": "first"}, {"role": "assistant", "text": "reply"}]
     ok = p({"persona": "test-ca-qc", "text": "and then?", "history": hist}).json()
     assert ok["answer"].startswith("Here is the answer") and ok["history_supported"] is False
-    assert bot.calls[-1] == {"sender": "test-ca-qc", "text": "and then?", "history": hist}
+    assert bot.calls[-1] == {"sender": "test-ca-qc", "text": "and then?"}  # no W3: history is not sent
     bot.fail["boom"] = [500]
     r = p({"persona": "test-ca-on", "text": "boom"})
     assert r.status_code == 502 and "HTTP 500" in r.json()["detail"]

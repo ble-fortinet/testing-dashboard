@@ -169,7 +169,8 @@ class Runner:
         judged = [r for r in results if r.get("phase") is None]
         probe = [r for r in results if r.get("phase") is not None]
         audit = None
-        if judged:
+        run = self.store.run(run_id) or {}
+        if judged and run.get("params", {}).get("scope") == "ready":  # a re-run of a few cases gets no audit
             prev_id = self.store.previous_judged_run(run_id)
             prev = self.store.results(prev_id) if prev_id else None
             ov = stats.overview(results, prev)

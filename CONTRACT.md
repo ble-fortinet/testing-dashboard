@@ -28,15 +28,16 @@ What `hr-server`'s compose and nginx need. Why: `PLAN.md`, `CLAUDE.md`.
 | Route | |
 |---|---|
 | `GET /` | the page; `GET /static/*` its assets (no data) |
-| `GET /api/state` | who, what's configured, the active run |
+| `GET /api/state` | who, what's configured, the active run, and the country → knowledge-base map the persona wizard previews with |
 | `GET /api/cases` · `POST /api/cases` · `PUT/DELETE /api/cases/{id}` | the test set; every change writes a version |
-| `GET /api/personas` | |
+| `GET /api/personas` · `POST /api/personas` · `PUT/DELETE /api/personas/{login}` | `test-` logins only; a login can't be renamed; delete refuses while a case asks as it or a persona reports to it. Every change writes a version |
 | `GET /api/versions` · `POST /api/versions/{id}/rollback` | |
 | `POST /api/import/preview` (multipart `file`, ≤ 10 MB) → `POST /api/import/apply {token}` | replace the whole set; the preview is the diff, single-use, 30 min, the uploader's own |
 | `GET /api/export/test-set` | `.xlsx`, in-app edits and review markers included |
 | `GET /api/export/test-roster.csv[?resolve_dates=true]` | the Personas sheet as the roster CSV the chatbot reads (W1) |
-| `GET/POST /api/runs` · `GET /api/runs/{id}` · `GET /api/runs/{id}/results` · `POST /api/runs/{id}/cancel` · `GET /api/runs/{id}/export` | one run at a time; 409 while one is going |
-| `POST /api/playground {persona, text, history}` | one chatbot turn as a test persona |
+| `GET/POST /api/runs` · `GET /api/runs/{id}` · `GET /api/runs/{id}/results` · `POST /api/runs/{id}/cancel` | one run at a time; 409 while one is going. Results are never exported |
+| `POST /api/cases/{id}/rerun` · `GET /api/runs/{id}/reruns` | re-run one case (a one-case run: no audit, never a regression baseline); a full run's page reads each case's newest partial run since, its outcome over every attempt |
+| `POST /api/playground {persona, text, history}` | one chatbot turn as a test persona; `history` reaches the chatbot only when `CHATBOT_HISTORY` is on (W3) |
 
 ## Identity
 

@@ -137,7 +137,7 @@ async def test_one_run_at_a_time(store, fakes):
         r.start({"scope": "ready"}, "ben")
     bot.gate.set()
     await finish(r, run_id, store)
-    second = r.start({"scope": "ids", "ids": [ready(store)[0]["id"]]}, "ben")  # free again
+    second = r.start({"scope": "ready"}, "ben")  # free again
     await finish(r, second, store)
     assert store.run(second)["audit"]["baseline_run"] == run_id
 
@@ -217,7 +217,7 @@ async def test_shutdown_interrupts_cleanly(store, fakes):
 
 async def test_a_cancelled_run_is_never_the_baseline(store, fakes):
     r = make(store, fakes)
-    one = r.start({"scope": "ids", "ids": [ready(store)[0]["id"]]}, "ben")
+    one = r.start({"scope": "ready"}, "ben")
     await finish(r, one, store)
     bot, _ = fakes
     bot.gate = asyncio.Event()
@@ -227,5 +227,5 @@ async def test_a_cancelled_run_is_never_the_baseline(store, fakes):
     bot.gate.set()
     assert (await finish(r, two, store))["status"] == "cancelled"
     bot.gate = None
-    three = r.start({"scope": "ids", "ids": [ready(store)[0]["id"]]}, "ben")
+    three = r.start({"scope": "ready"}, "ben")
     assert (await finish(r, three, store))["audit"]["baseline_run"] == one  # skips the cancelled #2

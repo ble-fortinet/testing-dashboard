@@ -482,84 +482,32 @@ def roster_csv(
     return buf.getvalue()
 
 
-# ---------------------------------------------------------------------- results export
-RESULT_COLS = [
-    ("case", 9),
-    ("attempt", 8),
-    ("status", 9),
-    ("score", 7),
-    ("threshold", 9),
-    ("category", 16),
-    ("persona", 17),
-    ("question", 44),
-    ("feedback", 40),
-    ("missing", 36),
-    ("contradicted", 36),
-    ("must_not hit", 30),
-    ("checks failed", 30),
-    ("signal", 11),
-    ("bot confidence", 10),
-    ("latency ms", 10),
-    ("in flight", 8),
-    ("answer", 70),
-    ("sources", 50),
-    ("error", 30),
-]
+# ---------------------------------------------------------------------- personas in the app
+# the roster columns the chatbot reads, for a test set that has never been imported
+DEFAULT_PERSONA_COLUMNS = [
+    "USERLOGIN", "in_roster", "purpose", "COUNTRY", "STATE", "LOCATION", "DIVISION", "BUSINESSUNIT",
+    "DEPARTMENT", "BUSINESSTITLE", "USERTYPE", "FIRSTNAME", "LASTNAME", "PREFERREDNAME", "EMAIL",
+    "EMPNO", "HIREDATE", "REHIREDATE", "LOA", "MANAGERLOGIN", "MGRLVL1", "MGRLVL2",
+]  # fmt: skip
+LOGIN_OK = re.compile(r"^test-[a-z0-9][a-z0-9-]{0,39}$", re.I)
+DATE_OK = re.compile(r"^(\d{4}-\d{2}-\d{2}|-\d{1,4}d)$")
+LOGIN_REFS = ("MANAGERLOGIN", "MGRLVL1", "MGRLVL2")
 
 
-def results_export(run: dict, results: list[dict], summary: dict) -> bytes:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Results"
-    _head(ws, [c for c, _ in RESULT_COLS], dict(RESULT_COLS))
-    for r, res in enumerate(results, 2):
-        case = res.get("case") or {}
-        pts = lines(case.get("expected", ""))
-        verdicts = (res.get("judge") or {}).get("points") or []
-        mn = lines(case.get("must_not", ""))
-        hits = (res.get("judge") or {}).get("must_not") or []
-        row = [
-            res.get("case_id"),
-            res.get("attempt"),
-            res.get("status"),
-            res.get("score"),
-            res.get("threshold"),
-            case.get("category"),
-            case.get("persona"),
-            case.get("question"),
-            res.get("feedback"),
-            "\n".join(p for p, v in zip(pts, verdicts, strict=False) if v == "missing"),
-            "\n".join(p for p, v in zip(pts, verdicts, strict=False) if v == "contradicted"),
-            "\n".join(m for m, h in zip(mn, hits, strict=False) if h),
-            "\n".join(
-                c["check"] + (f": {c['detail']}" if c.get("detail") else "")
-                for c in res.get("checks", [])
-                if not c["passed"]
-            ),
-            (res.get("bot") or {}).get("signal"),
-            (res.get("bot") or {}).get("confidence"),
-            res.get("latency_ms"),
-            res.get("in_flight"),
-            (res.get("bot") or {}).get("answer"),
-            "\n".join(
-                f"[{s.get('n')}] {s.get('region') or '-'}::{s.get('path') or s.get('title') or ''}{' (cited)' if s.get('cited') else ''}"
-                for s in (res.get("bot") or {}).get("sources") or []
-            ),
-            res.get("error"),
-        ]
-        for i, v in enumerate(row, 1):
-            cell = _put(ws, r, i, v)
-            cell.alignment, cell.border = WRAP, THIN
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(RESULT_COLS))}{max(len(results) + 1, 2)}"
-    wsum = wb.create_sheet("Summary")
-    rows = [("run", run.get("id")), ("kind", run.get("kind")), ("status", run.get("status"))]
-    rows += [(k, v) for k, v in (run.get("info") or {}).items() if not isinstance(v, (dict, list))]
-    rows += [(k, v) for k, v in summary.items() if not isinstance(v, (dict, list))]
-    for r, (k, v) in enumerate(rows, 1):
-        _put(wsum, r, 1, k).font = Font(bold=True)
-        _put(wsum, r, 2, v)
-    wsum.column_dimensions["A"].width = 24
-    wsum.column_dimensions["B"].width = 40
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+def normalize_persona(raw: dict, columns: list[str], logins: set[str]) -> dict:
+    """One persona from the app, in the sheet's columns. Raises ValueError with what to fix."""
+    p = {c: _text(raw.get(c)) for c in columns}
+    login = p.get("USERLOGIN", "")
+    if not LOGIN_OK.match(login):
+        raise ValueError("the login must start test- and use letters, digits and - only")
+    if p.get("in_roster", "Y").upper() not in ("Y", "N", ""):
+        raise ValueError("in_roster is Y or N")
+    for c in ("HIREDATE", "REHIREDATE"):
+        if p.get(c) and not DATE_OK.match(p[c]):
+            raise ValueError(f"{c} is a date (2024-03-01) or days ago (-10d)")
+    for c in LOGIN_REFS:  # a manager chain may only point at other test personas
+        if p.get(c) and p[c] not in logins | {login}:
+            raise ValueError(f"{c} {p[c]!r} is not a persona")
+    if "_comments" in raw:
+        p["_comments"] = raw["_comments"]
+    return p

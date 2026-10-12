@@ -303,15 +303,43 @@ def test_control_characters_and_huge_text_dont_break_exports():
     out["cases"][0]["question"] = "line one\x0bline two\x00"
     data = export(out["cases"], out["personas"], out["persona_columns"], [])
     assert parse(data)["cases"][0]["question"] == "line oneline two"
-    res = [{"case_id": "TC-001", "attempt": 1, "status": "fail", "case": out["cases"][0],
-            "bot": {"answer": "=1+1 " + "x" * 40000 + "\x07", "sources": []}}]  # fmt: skip
-    ws = load_workbook(io.BytesIO(wbk.results_export({"id": 1}, res, {})))["Results"]
-    answer = ws.cell(row=2, column=18).value
-    assert answer.startswith("=1+1") and answer.endswith("[truncated]") and len(answer) <= 32767
-    assert ws.cell(row=2, column=18).data_type == "s"
+    out["cases"][0]["notes"] = "=1+1 " + "x" * 40000 + ""
+    ws = load_workbook(io.BytesIO(export(out["cases"], out["personas"], out["persona_columns"], [])))["Cases"]
+    notes = ws.cell(row=2, column=11).value
+    assert notes.startswith("=1+1") and notes.endswith("[truncated]") and len(notes) <= 32767
+    assert ws.cell(row=2, column=11).data_type == "s"
 
 
 @pytest.mark.parametrize("bad", ["TC 001", "TC/001", "-x", "a" * 41])
 def test_ids_must_be_url_safe(bad):
     with pytest.raises(WorkbookError, match="letters, digits"):
         parse(book([row(id=bad)]))
+
+
+# ---------------------------------------------------------------- personas in the app
+COLS = wbk.DEFAULT_PERSONA_COLUMNS
+
+
+def test_a_new_persona_takes_the_sheet_columns():
+    p = wbk.normalize_persona({"USERLOGIN": "test-ca-new", "HIREDATE": "-10d", "junk": "x"}, COLS, set())
+    assert list(p) == COLS and p["HIREDATE"] == "-10d" and "junk" not in p
+
+
+@pytest.mark.parametrize(
+    ("raw", "why"),
+    [
+        ({"USERLOGIN": "JSMITH"}, "start test-"),
+        ({"USERLOGIN": "test-a b"}, "start test-"),
+        ({"USERLOGIN": "test-x", "HIREDATE": "March 1"}, "HIREDATE"),
+        ({"USERLOGIN": "test-x", "in_roster": "maybe"}, "in_roster"),
+        ({"USERLOGIN": "test-x", "MGRLVL1": "JSMITH"}, "not a persona"),
+    ],
+)
+def test_a_persona_is_refused_with_what_to_fix(raw, why):
+    with pytest.raises(ValueError, match=why):
+        wbk.normalize_persona(raw, COLS, {"test-ca-mgr"})
+
+
+def test_a_manager_must_be_another_persona():
+    p = wbk.normalize_persona({"USERLOGIN": "test-x", "MGRLVL1": "test-ca-mgr"}, COLS, {"test-ca-mgr"})
+    assert p["MGRLVL1"] == "test-ca-mgr"

@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from tdash import judge as judge_mod
-from tdash import secrets, stats, workbook
+from tdash import regions, secrets, stats, workbook
 from tdash.chatbot import Chatbot, ChatbotError
 from tdash.config import SECRET_FIELDS, Config
 from tdash.runner import Busy, Runner
@@ -143,6 +143,7 @@ def create_app(
             "test_set_version": store.test_set_version(),
             "active_run": run["id"] if run else None,
             "dev": bool(c.dev_identity),
+            "regions": regions.country_map(),
         }
 
     # ------------------------------------------------------------------ test set
@@ -152,7 +153,48 @@ def create_app(
 
     @r.get("/api/personas")
     def api_personas():
-        return {"personas": store.personas(), "columns": store.persona_columns()}
+        return {"personas": store.personas(), "columns": store.persona_columns() or workbook.DEFAULT_PERSONA_COLUMNS}
+
+    def _persona(body: dict, user: dict, login: str | None) -> dict:
+        have = {p["USERLOGIN"]: p for p in store.personas()}
+        new = str(body.get("USERLOGIN") or "").strip()
+        if login is None and new in have:
+            raise HTTPException(409, f"{new} already exists")
+        if login is not None:
+            if login not in have:
+                raise HTTPException(404, f"no persona {login}")
+            if new and new != login:
+                raise HTTPException(400, "a persona's login can't be changed; add a new one")
+            body = {**have[login], **body, "USERLOGIN": login}
+        cols = store.persona_columns() or workbook.DEFAULT_PERSONA_COLUMNS
+        try:
+            p = workbook.normalize_persona(body, cols, set(have))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        if login is not None and all(have[login].get(k, "") == v for k, v in p.items()):
+            return p  # unchanged: not an edit, no version
+        store.save_persona(p, cols, user["username"], workbook.validate_case)
+        return p
+
+    @r.post("/api/personas")
+    def api_add_persona(body: dict, user: Annotated[dict, Depends(admin)]):
+        return _persona(body, user, None)
+
+    @r.put("/api/personas/{login}")
+    def api_edit_persona(login: str, body: dict, user: Annotated[dict, Depends(admin)]):
+        return _persona(body, user, login)
+
+    @r.delete("/api/personas/{login}")
+    def api_delete_persona(login: str, user: Annotated[dict, Depends(admin)]):
+        users = [c["id"] for c in store.cases() if c.get("persona") == login]
+        if users:  # deleting it would quietly stop those cases running
+            raise HTTPException(409, f"{len(users)} case(s) ask as {login}: {', '.join(users[:10])}")
+        refs = [p["USERLOGIN"] for p in store.personas() if login in (p.get(k) for k in workbook.LOGIN_REFS)]
+        if refs:
+            raise HTTPException(409, f"{', '.join(refs)} report(s) to {login}")
+        if store.delete_persona(login, user["username"], workbook.validate_case) is None:
+            raise HTTPException(404, f"no persona {login}")
+        return {"ok": True}
 
     def _save(body: dict, user: dict, case_id: str | None) -> dict:
         existing = {c["id"] for c in store.cases()}
@@ -286,8 +328,10 @@ def create_app(
             raise HTTPException(404, f"no run {run_id}")
         results = store.results(run_id)
         prev_id = (run.get("audit") or {}).get("baseline_run") or store.previous_judged_run(run_id)
-        run["overview"] = stats.overview(results, store.results(prev_id) if prev_id else None)
+        prev = store.results(prev_id) if prev_id else None
+        run["overview"] = stats.overview(results, prev)
         run["baseline_run"] = prev_id
+        run["baseline_pass_rate"] = stats.overview(prev)["pass_rate"] if prev else None
         return run
 
     @r.get("/api/runs/{run_id}/results")
@@ -302,16 +346,30 @@ def create_app(
             raise HTTPException(409, "that run isn't in progress")
         return {"ok": True}
 
-    @r.get("/api/runs/{run_id}/export")
-    def api_run_export(run_id: int):
-        run = store.run(run_id)
-        if run is None:
+    @r.get("/api/runs/{run_id}/reruns")
+    def api_reruns(run_id: int):
+        if store.run(run_id) is None:
             raise HTTPException(404, f"no run {run_id}")
-        results = store.results(run_id)
-        prev_id = store.previous_judged_run(run_id)
-        ov = stats.overview(results, store.results(prev_id) if prev_id else None)
-        summary = {k: v for k, v in ov.items() if not isinstance(v, (dict, list))}
-        return _download(workbook.results_export(run, results, summary), f"run-{run_id}-results.xlsx", XLSX)
+        out = {}
+        for cid, attempts in store.reruns_after(run_id).items():
+            # with repeats, a case passes only if every graded attempt did, as in a full run
+            graded = [a for a in attempts if a["status"] in ("pass", "fail")]
+            out[cid] = {**attempts[-1], "status": stats.case_outcomes(attempts)[cid], "attempts": len(attempts),
+                        "passed_attempts": sum(a["status"] == "pass" for a in graded)}  # fmt: skip
+        return {"reruns": out}
+
+    @r.post("/api/cases/{case_id}/rerun")
+    async def api_rerun(case_id: str, user: Annotated[dict, Depends(admin)]):
+        # async for the same reason as api_start
+        if store.case(case_id) is None:
+            raise HTTPException(404, f"no case {case_id}")
+        try:
+            run_id = runner().start({"scope": "ids", "ids": [case_id], "concurrency": 1}, user["username"])
+        except Busy as e:
+            raise HTTPException(409, str(e)) from None
+        except (ValueError, TypeError) as e:
+            raise HTTPException(400, str(e)) from None
+        return store.run(run_id)
 
     # ------------------------------------------------------------------ playground
     @r.post("/api/playground")
@@ -338,7 +396,8 @@ def create_app(
                 raise HTTPException(400, "each history message needs role user|assistant and text")
             clean.append({"role": m["role"], "text": m["text"]})
         try:
-            out = await bot.query(persona, text, clean or None)
+            # without work order W3 the chatbot has no history field; never send one it can't take
+            out = await bot.query(persona, text, (clean or None) if state["cfg"].chatbot_history else None)
         except ChatbotError as e:
             raise HTTPException(502, str(e)) from None
         return {**out, "history_supported": state["cfg"].chatbot_history}

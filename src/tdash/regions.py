@@ -101,3 +101,10 @@ def region_for_persona(persona: dict) -> str | None:
     if str(persona.get("in_roster", "Y")).strip().upper() == "N":
         return None
     return region_for_country(persona.get("COUNTRY"))
+
+
+def country_map() -> dict[str, str]:
+    """Every country code (and alias or literal) that has a knowledge base, for the UI's previews."""
+    out = dict.fromkeys(_EMEA, "hremea") | dict.fromkeys(_LATAM, "hrlatam") | {"US": "hrus", "CA": "hrcanada"}
+    out |= {a: out[c] for a, c in _ALIASES.items()} | dict(_LITERAL)
+    return dict(sorted(out.items()))

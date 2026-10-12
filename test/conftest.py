@@ -111,6 +111,7 @@ class FakeJudge:
         self.calls: list[dict] = []
         self.mode: list[str] = []  # queued behaviours: "garbage", "short", "500", "fenced"
         self.audit_reply: str | None = None
+        self.contradict = 0  # the next N gradings contradict the first point
 
     async def handler(self, request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/chat/completions")
@@ -134,6 +135,9 @@ class FakeJudge:
             pts[0], fb = "contradicted", "Wrong: first point."
         if "MISSING" in answer and pts:
             pts[0], fb = "missing", "Missing: first point."
+        if self.contradict and pts:
+            self.contradict -= 1
+            pts[0], fb = "contradicted", "Wrong: first point."
         if "HIT" in answer and mn:
             mn[0] = True
         if mode == "short":
