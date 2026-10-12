@@ -10,10 +10,11 @@ What `hr-server`'s compose and nginx need. Why: `PLAN.md`, `CLAUDE.md`.
 | Published | nothing. Reached from its own network `hrtesting` only — members web, this, and the chatbot API — never `hrtools` or `hradmintools`: it holds a chatbot service token |
 | Container | `testing-dash.hrai.docker` — nginx uses this name |
 | Image | `hrai-testing-dash:latest` (`make image`; `TAG=` for a pinned one) |
-| Deployed | nowhere yet |
+| Deployed | nowhere yet. Compose and nginx for it are written in hr-server (`hrportal`, `hrassist`), uncommitted |
 | Runs as | uid `10004` |
 | Health | `GET /healthz` (outside `BASE_PATH`), no session, touches no file |
 | Data | **its own volume** at `/data`, writable by uid 10004: `tdash.db` (SQLite, WAL) — the test set, its versions, runs and results. It reads no other tool's data and no portal `tool_data/` |
+| Test roster | `TEST_ROSTER_PATH`, a mount of **only** `data/hrassist/roster/test/` (never the real roster beside it), writable by uid 10004, readable by the API (uid 999). Rewritten atomically, `0644`, on every persona change, import and restore, and at startup |
 
 ## Calls out
 
@@ -62,9 +63,10 @@ The gate sends `X-Tool-Gate: admin`, so only role admin reaches it; every route 
 | `CHATBOT_CA` | system trust | CA bundle path, for a self-signed front door |
 | `CHATBOT_TIMEOUT` | `150` | seconds; above the chatbot's own 120 s LLM timeout |
 | `CHATBOT_HISTORY` | `false` | set once work order W3 is deployed |
-| `JUDGE_URL` · `JUDGE_MODEL` | — | required to run |
-| `JUDGE_API_KEY` | — | `SECRET:<KEY>` allowed |
-| `JUDGE_CA` · `JUDGE_TIMEOUT` · `JUDGE_NO_THINK` | system · `60` · `true` | |
+| `JUDGE_URL` · `JUDGE_MODEL` | — | required to run; unset = `LLM__BASE_URL` · `LLM__MODEL` |
+| `JUDGE_API_KEY` | — | `SECRET:<KEY>` allowed; unset = `LLM__API_KEY` |
+| `JUDGE_CA` · `JUDGE_TIMEOUT` · `JUDGE_NO_THINK` | system · `60` (unset = `LLM__REQUEST_TIMEOUT`) · `true` | the `LLM__*` names are the shared `llm_env` file's |
+| `TEST_ROSTER_PATH` | — | where the test roster is written (W1); unset = not written, download it instead |
 | `DEFAULT_THRESHOLD` | `0.75` | a case's blank threshold |
 | `DEFAULT_CONCURRENCY` · `MAX_CONCURRENCY` | `4` · `16` | |
 | `FORTIPAM_URL` · `FORTIPAM_TOKEN` · `FORTIPAM_SECRET_ID` · `FORTIPAM_CA` | itpam · — · — · system | only if a value is `SECRET:` |

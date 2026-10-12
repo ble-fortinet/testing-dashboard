@@ -5,6 +5,23 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 SECRET_FIELDS = ("CHATBOT_TOKEN", "JUDGE_API_KEY")
+# The platform's shared LLM env file (llm_env) uses the chatbot's names. Each is read when its
+# JUDGE_* twin is unset, so the dashboard can take that file as it is.
+LLM_FALLBACKS = {
+    "JUDGE_URL": "LLM__BASE_URL",
+    "JUDGE_MODEL": "LLM__MODEL",
+    "JUDGE_TIMEOUT": "LLM__REQUEST_TIMEOUT",
+    "JUDGE_API_KEY": "LLM__API_KEY",
+}
+
+
+def effective_env(env: Mapping[str, str]) -> dict[str, str]:
+    """`env` with each unset JUDGE_* filled from its LLM__* twin."""
+    out = dict(env)
+    for name, twin in LLM_FALLBACKS.items():
+        if not (out.get(name) or "").strip() and (out.get(twin) or "").strip():
+            out[name] = out[twin]
+    return out
 
 
 def _num(env: Mapping[str, str], name: str, default: float, lo: float, hi: float) -> float:
@@ -45,6 +62,9 @@ class Config:
     default_threshold: float = 0.75
     default_concurrency: int = 4
     max_concurrency: int = 16
+    # where the chatbot reads its test roster (work order W1): rewritten on every persona change.
+    # Empty = not written; download it from Test set > More instead
+    test_roster_path: str = ""
     dev_identity: str = ""  # "user:role" — desktop only, loopback only
     git_commit: str = "unknown"
 
@@ -62,7 +82,7 @@ class Config:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Config":
-        env = os.environ if env is None else env
+        env = effective_env(os.environ if env is None else env)
         g = lambda k, d="": (env.get(k) or d).strip()  # noqa: E731
         # BASE_PATH= (empty) is meaningful: serve at the root, as the other tools do on the desktop
         base = env.get("BASE_PATH", "/tools/testing-dash").strip().rstrip("/")
@@ -93,6 +113,7 @@ class Config:
             default_threshold=_num(env, "DEFAULT_THRESHOLD", 0.75, 0, 1),
             default_concurrency=conc,
             max_concurrency=top,
+            test_roster_path=g("TEST_ROSTER_PATH"),
             dev_identity=g("DEV_IDENTITY"),
             git_commit=g("GIT_COMMIT", "unknown"),
         )

@@ -94,3 +94,28 @@ def test_config_with_secrets():
         {"CHATBOT_TOKEN": "real"}
     )
     assert c.chatbot_token == "real" and c.chatbot_url == "https://w" and c.chatbot_ready
+
+
+def test_the_shared_llm_env_file_fills_the_judge():
+    llm = {"LLM__BASE_URL": "https://llm/v1/", "LLM__MODEL": "m", "LLM__REQUEST_TIMEOUT": "90", "LLM__API_KEY": "k"}
+    c = Config.from_env(llm)
+    assert (c.judge_url, c.judge_model, c.judge_timeout, c.judge_api_key) == ("https://llm/v1", "m", 90.0, "k")
+    assert c.judge_ready
+    # a JUDGE_* setting wins over its LLM__* twin
+    c = Config.from_env({**llm, "JUDGE_MODEL": "judge", "JUDGE_URL": "https://j/v1"})
+    assert (c.judge_url, c.judge_model) == ("https://j/v1", "judge")
+    with pytest.raises(ValueError, match="JUDGE_URL"):
+        Config.from_env({"LLM__BASE_URL": "llm-host"})
+
+
+async def test_a_secret_llm_key_resolves_through_its_judge_name():
+    from tdash.config import effective_env
+
+    def pam(req: httpx.Request) -> httpx.Response:
+        if req.method == "GET":
+            return httpx.Response(200, json={"http_status": 200, "results": [{"field": [{"name": "K", "id": 7}]}]})
+        return httpx.Response(200, json={"http_status": 200, "secret-id": 4738, "results": "the-key"})
+
+    env = effective_env({**ENV, "LLM__API_KEY": "SECRET:K"})
+    out = await resolve(env, ["CHATBOT_TOKEN", "JUDGE_API_KEY"], transport=httpx.MockTransport(pam))
+    assert out == {"JUDGE_API_KEY": "the-key"}

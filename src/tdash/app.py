@@ -7,6 +7,7 @@ uvicorn --factory tdash.app:create_app --port 9230
 DEV_IDENTITY=ble:admin DATA_DIR=. BASE_PATH= uvicorn --factory tdash.app:create_app --reload --port 9230   # desktop
 """
 
+import contextlib
 import logging
 import os
 import secrets as pysecrets
@@ -25,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from tdash import judge as judge_mod
 from tdash import regions, secrets, stats, workbook
 from tdash.chatbot import Chatbot, ChatbotError
-from tdash.config import SECRET_FIELDS, Config
+from tdash.config import SECRET_FIELDS, Config, effective_env
 from tdash.runner import Busy, Runner
 from tdash.store import Store
 
@@ -60,13 +61,34 @@ def create_app(
     judge_transport: httpx.AsyncBaseTransport | None = None,
     pam_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
-    env = os.environ if env is None else env
+    env = effective_env(os.environ if env is None else env)
     cfg = cfg or Config.from_env(env)
     base = cfg.base_path
     os.makedirs(cfg.data_dir, exist_ok=True)
     store = Store(cfg.db_path)
     state: dict = {"cfg": cfg, "runner": None, "chatbot": None, "llm": None}
     pending: dict[str, dict] = {}
+    roster: dict = {"written_at": None, "error": None}
+
+    def sync_roster() -> None:
+        """Write the Personas sheet where the chatbot reads its test roster, atomically, so it
+        never sees half a file. Relative dates stay relative: the chatbot resolves them daily."""
+        path = state["cfg"].test_roster_path
+        if not path:
+            return
+        text = workbook.roster_csv(store.personas(), store.persona_columns() or workbook.DEFAULT_PERSONA_COLUMNS)
+        tmp = f"{path}.tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+            os.chmod(tmp, 0o644)  # the chatbot API runs as another uid
+            os.replace(tmp, path)
+            roster.update(written_at=time.time(), error=None)
+        except OSError as e:
+            log.warning("test roster not written to %s: %s", path, e)
+            roster["error"] = f"Could not write the test roster ({type(e).__name__})"
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -86,6 +108,7 @@ def create_app(
                 judge_transport,
             )  # fmt: skip
         state["runner"] = Runner(store, c, state["chatbot"], state["llm"])
+        sync_roster()  # the file may be missing or older than the database
         yield
         await state["runner"].shutdown()
         for k in ("chatbot", "llm"):
@@ -143,6 +166,7 @@ def create_app(
             "test_set_version": store.test_set_version(),
             "active_run": run["id"] if run else None,
             "dev": bool(c.dev_identity),
+            "test_roster": {"configured": bool(c.test_roster_path), **roster},
             "regions": regions.country_map(),
         }
 
@@ -174,6 +198,7 @@ def create_app(
         if login is not None and all(have[login].get(k, "") == v for k, v in p.items()):
             return p  # unchanged: not an edit, no version
         store.save_persona(p, cols, user["username"], workbook.validate_case)
+        sync_roster()
         return p
 
     @r.post("/api/personas")
@@ -194,6 +219,7 @@ def create_app(
             raise HTTPException(409, f"{', '.join(refs)} report(s) to {login}")
         if store.delete_persona(login, user["username"], workbook.validate_case) is None:
             raise HTTPException(404, f"no persona {login}")
+        sync_roster()
         return {"ok": True}
 
     def _save(body: dict, user: dict, case_id: str | None) -> dict:
@@ -245,6 +271,7 @@ def create_app(
         new = store.rollback(vid, user["username"])
         if new is None:
             raise HTTPException(404, f"no version {vid}")
+        sync_roster()
         return {"version": new}
 
     # ------------------------------------------------------------------ import / export
@@ -288,6 +315,7 @@ def create_app(
             d["cases"], d["personas"], d["persona_columns"], d["case_extra_columns"], user["username"], "import",
             f"imported {p['name']}",
         )  # fmt: skip
+        sync_roster()
         return {"version": vid, "cases": len(d["cases"])}
 
     def _download(content: bytes | str, name: str, kind: str) -> Response:

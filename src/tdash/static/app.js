@@ -503,6 +503,7 @@ function SetView({ info, cases, personas, columns, regionOf, active, refresh, op
         <button role="menuitem" onClick=${() => setModal("versions")}>Versions<small>Every change to the set; restore any of them</small></button>
       <//>
     </div>
+    ${info.test_roster && info.test_roster.error && html`<div class="banner err" role="alert">${info.test_roster.error}. The chatbot keeps the last copy it read, so persona changes since then don't reach it.</div>`}
     ${tab === "cases" && html`<div class="seg" style="align-self:flex-start">${[["all", "All", cases.length], ["ready", "Ready", cases.filter((c) => c.status === "ready").length], ["draft", "Draft & off", cases.filter((c) => c.status !== "ready").length], ["review", "Needs your review", cases.filter((c) => c.review).length], ["issues", "Has issues", cases.filter((c) => (c.issues || []).length).length]].map(([k, l, n]) => html`<button aria-pressed=${cf === k} onClick=${() => setCf(k)}>${l}<span class="n">${n}</span></button>`)}</div>`}
     ${!cases.length && !personas.length ? html`<div class="card empty">No test set yet. Use <b>Import .xlsx</b> with the test-set workbook, or start with <b>New persona</b>.</div>` : html`
     <div class=${`ts-body${selCase || selPers ? "" : " nosel"}`}>

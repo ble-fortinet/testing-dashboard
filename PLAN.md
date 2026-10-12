@@ -241,14 +241,16 @@ items with the date.
   - where the test roster file lives on the desktop and on staging (`REGION__TEST_ROSTER_CSV`)
   - whether `hrtesting` and the nginx `/tools/testing-dash/` location exist in hr-server,
     or this deploy adds them
-- [ ] **Connect the real AI.** The judge and the audit's phrasing have only ever run against
-  fakes. Point them at `aicoding` (fallback `agentassist`), run the set once, and hand-check
-  ~30 results against the answers before trusting a pass rate.
-- [ ] **Decide how the test roster reaches the chatbot.** Today it's downloaded (Test set →
-  More) and copied by hand after every persona change. Recommended: the dashboard writes it
-  to a shared read-only mount on each change (~40 lines, one compose mount).
-- [ ] **Decide French questions**: answer in English plus a tip to switch the language, or
-  only the tip. Sets TC-007's expected points.
+- [ ] **Connect the real AI.** First contact 2026-10-12: a local `test/all` chatbot and the
+  `llm_env` judge (`forticoder-fast`), 17 cases across every category plus a two-turn
+  playground — profile, manager, reports, new-hire and region checks all held. It found one
+  bug, fixed: the real judge answers `must_not: [false]` for an empty list. Still owed: a
+  full run, the audit's phrasing, and hand-checking ~30 results before trusting a pass rate.
+- [x] **How the test roster reaches the chatbot** (2026-10-12): the dashboard writes it to
+  `TEST_ROSTER_PATH` on every change — a mount of only `data/hrassist/roster/test/`, read by
+  the API as `REGION__TEST_ROSTER_CSV`. A write that fails shows as a banner in Test set.
+- [ ] **Decide French questions** — deferred (Ben, 2026-10-12) until French lands in the
+  chatbot, which is soon. Sets TC-007's expected points.
 - [ ] **First `docker build`** (`make image`) — never run; no daemon where it was written.
 
 Settled 2026-10-12: edits to cases and personas are allowed during a run (the run asks

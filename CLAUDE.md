@@ -25,8 +25,8 @@ the gate.
   cross-sheet dropdown in an extension openpyxl drops on load; it vanished once.
 - **Comments from current Excel are threaded comments.** openpyxl only sees a legacy copy
   wrapped in boilerplate; `workbook.comment_text()` unwraps it. Keep it when touching import.
-- **Personas must be `test-` logins** — enforced at import, on cases and in the playground.
-  Until W2 lands, a real login would make the chatbot answer as that employee.
+- **Personas must be `test-` logins** — enforced at import, on cases and in the playground,
+  and chatbot-side by W2 once `TEST_SERVICES` names the dashboard's token.
 - **The judge reads untrusted text.** The answer under test is fenced and declared data;
   replies are validated strictly and retried once; a bad reply is `error`, never a pass.
 - **The audit's LLM never computes a number.** `stats.audit()` drops any rewording that
@@ -34,6 +34,8 @@ the gate.
 - **An infrastructure failure is `error`, not `fail`.** Retried once; 401/403 aren't.
 - **Saving an unchanged case is not an edit** — no version, nothing for an import to "undo".
   The same holds for personas.
+- **The judge's settings fall back to the shared `llm_env` names** (`LLM__BASE_URL`, `LLM__MODEL`,
+  `LLM__REQUEST_TIMEOUT`, `LLM__API_KEY`); a `JUDGE_*` value wins. `config.effective_env`.
 - **The static cache key is computed at startup** (`?v=` from file mtimes). Edit
   `static/` with a server running and the browser keeps the old file: restart it.
 - **Fonts are self-hosted** (`static/vendor/fonts`, OFL). The front door's CSP allows
@@ -46,4 +48,4 @@ the gate.
 seed, `test/fixtures/seed.xlsx`, and pin its counts. Never point them at
 `test-set/hr-assist-test-set.xlsx`: Ben and HR edit that one, and only a loose "it still
 imports" test reads it.
-Nothing in the suite has run against the real chatbot or judge yet.
+The suite itself never touches the real chatbot or judge; one end-to-end pass did (2026-10-12, `PLAN.md` § TODO).

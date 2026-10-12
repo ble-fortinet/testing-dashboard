@@ -408,3 +408,69 @@ def test_restart_interrupts_a_running_run(tmp_path, fakes, seed_bytes):
         run = c.get(f"{B}/api/runs/{rid}", headers=ADMIN).json()
         assert run["status"] == "interrupted" and 0 < run["done"] < run["total"]
         assert json.loads(json.dumps(run))  # serialisable end to end
+
+
+# ---------------------------------------------------------------- the test roster the chatbot reads (W1)
+@pytest.fixture
+def roster_client(tmp_path, fakes):
+    bot, judge = fakes
+    path = tmp_path / "roster" / "test-roster.csv"
+    path.parent.mkdir()
+    app = create_app(
+        cfg(tmp_path, test_roster_path=str(path)),
+        env={},
+        chatbot_transport=httpx.MockTransport(bot.handler),
+        judge_transport=httpx.MockTransport(judge.handler),
+    )
+    with TestClient(app) as c:
+        yield c, path
+
+
+def _lines(path) -> list[str]:
+    return path.read_text().splitlines()
+
+
+def test_the_roster_is_written_on_every_change(roster_client, seed_bytes):
+    import stat
+
+    c, path = roster_client
+    assert _lines(path)[1:] == []  # at startup: a header and no personas yet
+    imported(c, seed_bytes)
+    assert _lines(path) == c.get(f"{B}/api/export/test-roster.csv", headers=ADMIN).text.splitlines()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o644  # the chatbot API is another uid
+    assert "-10d" in path.read_text()  # relative: the chatbot resolves it daily
+    c.post(f"{B}/api/personas", headers=ADMIN, json={"USERLOGIN": "test-zz", "COUNTRY": "US"})
+    assert any(line.startswith("test-zz,") for line in _lines(path))
+    c.put(f"{B}/api/personas/test-zz", headers=ADMIN, json={"COUNTRY": "CA"})
+    row = next(line for line in _lines(path) if line.startswith("test-zz,"))
+    assert ",CA," in row or row.endswith(",CA")
+    c.delete(f"{B}/api/personas/test-zz", headers=ADMIN)
+    assert not any(line.startswith("test-zz,") for line in _lines(path))
+    first = c.get(f"{B}/api/versions", headers=ADMIN).json()["versions"][-1]["id"]
+    c.post(f"{B}/api/versions/{first}/rollback", headers=ADMIN)
+    assert _lines(path) == c.get(f"{B}/api/export/test-roster.csv", headers=ADMIN).text.splitlines()
+    assert sorted(p.name for p in path.parent.iterdir()) == ["test-roster.csv"]  # no temp left behind
+    state = c.get(f"{B}/api/state", headers=ADMIN).json()["test_roster"]
+    assert state["configured"] and state["written_at"] and state["error"] is None
+
+
+def test_a_roster_that_cannot_be_written_says_so(tmp_path, fakes, seed_bytes, caplog):
+    bot, judge = fakes
+    app = create_app(
+        cfg(tmp_path, test_roster_path=str(tmp_path / "absent" / "test-roster.csv")),
+        env={},
+        chatbot_transport=httpx.MockTransport(bot.handler),
+        judge_transport=httpx.MockTransport(judge.handler),
+    )
+    with TestClient(app) as c:
+        imported(c, seed_bytes)  # the change itself still lands
+        state = c.get(f"{B}/api/state", headers=ADMIN).json()["test_roster"]
+        assert state["error"] == "Could not write the test roster (FileNotFoundError)"
+        assert len(c.get(f"{B}/api/personas", headers=ADMIN).json()["personas"]) > 0
+    assert "test roster not written" in caplog.text
+
+
+def test_without_a_roster_path_nothing_is_written(client, seed_bytes, tmp_path):
+    imported(client, seed_bytes)
+    assert client.get(f"{B}/api/state", headers=ADMIN).json()["test_roster"]["configured"] is False
+    assert not list(tmp_path.glob("*.csv"))
