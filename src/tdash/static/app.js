@@ -648,7 +648,7 @@ function VersionsModal({ onClose, onRestored, busy }) {
 const Field = ({ label, hint, children }) => html`<label class="field">${label}${children}${hint && html`<span class="hint">${hint}</span>`}</label>`;
 const Choice = ({ value, set, opts }) => html`<div class="choice">${opts.map(([k, l, s]) => html`<button type="button" aria-pressed=${value === k} onClick=${() => set(k)}>${l}${s && html`<small>${s}</small>`}</button>`)}</div>`;
 const LOGIN_OK = /^test-[a-z0-9][a-z0-9-]{0,39}$/i;
-const DATE_OK = /^(\d{4}-\d{2}-\d{2}|-\d{1,4}d)$/;
+const DATE_OK = /^(\d{4}-\d{2}-\d{2}|[-+]\d{1,4}d)$/;
 const ID_OK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
 
 function PersonaCard({ p, region }) {
@@ -772,8 +772,8 @@ function PersonaWizard({ init, columns, personas, regionOf, regions, onClose, on
   const check = (from) => {
     if (from === 0 && !LOGIN_OK.test(d.USERLOGIN)) return "The login must start test- and use letters, digits and - only.";
     if (from === 0 && !editing && personas.some((p) => p.USERLOGIN === d.USERLOGIN)) return `${d.USERLOGIN} already exists.`;
-    if (from === 2 && d.HIREDATE && !DATE_OK.test(d.HIREDATE)) return "Hired is a date (2021-03-15) or days ago (-30d).";
-    if (from === 2 && d.REHIREDATE && !DATE_OK.test(d.REHIREDATE)) return "Rehired is a date (2024-01-08) or days ago (-10d).";
+    if (from === 2 && d.HIREDATE && !DATE_OK.test(d.HIREDATE)) return "Hired is a date (2021-03-15), days ago (-30d) or days ahead (+7d).";
+    if (from === 2 && d.REHIREDATE && !DATE_OK.test(d.REHIREDATE)) return "Rehired is a date (2024-01-08), days ago (-10d) or days ahead (+7d).";
     return "";
   };
   const canNext = (from, to) => { for (let s = from; s < to; s++) { const e = check(s); if (e) { setErr(e); setStep(s); return false; } } return true; };

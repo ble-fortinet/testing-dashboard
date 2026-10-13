@@ -60,7 +60,7 @@ THIN = Border(bottom=Side(style="thin", color="DDDDDD"))
 TEXT_COLUMNS = {"HIREDATE", "REHIREDATE", "EMPNO"}  # never let Excel turn these into numbers or dates
 BULLET = re.compile(r"^\s*(?:[-•*·]|\d{1,2}[.)])\s+")
 PREFIX = re.compile(r"^\s*(ADD|CHECK)\s*[—–:-]*\s*", re.I)
-RELATIVE = re.compile(r"^-(\d{1,4})d$")
+RELATIVE = re.compile(r"^([-+])(\d{1,4})d$")
 CASE_ID = re.compile(r"^TC-(\d+)$")
 # an id is a key and part of a URL: no spaces or slashes
 ID_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$")
@@ -476,7 +476,8 @@ def roster_csv(
         for c in cols:
             v = p.get(c, "") or ""
             if resolve_dates and (m := RELATIVE.match(v)):
-                v = (today - timedelta(days=int(m.group(1)))).isoformat()
+                days = int(m.group(2)) * (-1 if m.group(1) == "-" else 1)
+                v = (today + timedelta(days=days)).isoformat()
             row.append(v)
         w.writerow(row)
     return buf.getvalue()
@@ -490,7 +491,7 @@ DEFAULT_PERSONA_COLUMNS = [
     "EMPNO", "HIREDATE", "REHIREDATE", "LOA", "MANAGERLOGIN", "MGRLVL1", "MGRLVL2",
 ]  # fmt: skip
 LOGIN_OK = re.compile(r"^test-[a-z0-9][a-z0-9-]{0,39}$", re.I)
-DATE_OK = re.compile(r"^(\d{4}-\d{2}-\d{2}|-\d{1,4}d)$")
+DATE_OK = re.compile(r"^(\d{4}-\d{2}-\d{2}|[-+]\d{1,4}d)$")
 LOGIN_REFS = ("MANAGERLOGIN", "MGRLVL1", "MGRLVL2")
 
 
@@ -504,7 +505,7 @@ def normalize_persona(raw: dict, columns: list[str], logins: set[str]) -> dict:
         raise ValueError("in_roster is Y or N")
     for c in ("HIREDATE", "REHIREDATE"):
         if p.get(c) and not DATE_OK.match(p[c]):
-            raise ValueError(f"{c} is a date (2024-03-01) or days ago (-10d)")
+            raise ValueError(f"{c} is a date (2024-03-01), days ago (-10d) or days ahead (+7d)")
     for c in LOGIN_REFS:  # a manager chain may only point at other test personas
         if p.get(c) and p[c] not in logins | {login}:
             raise ValueError(f"{c} {p[c]!r} is not a persona")

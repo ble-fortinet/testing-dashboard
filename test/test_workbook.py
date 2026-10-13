@@ -277,6 +277,21 @@ def test_roster_csv_resolves_relative_dates(seed):
     assert "2026-09-29" in text and "2026-10-04" in text
 
 
+def test_roster_csv_resolves_a_future_date(seed):
+    """+Nd is a pre-boarding persona: it starts after today."""
+    personas = [*seed["personas"], {"USERLOGIN": "test-pre", "HIREDATE": "+7d"}]
+    text = roster_csv(personas, seed["persona_columns"], resolve_dates=True, today=date(2026, 10, 9))
+    assert "+7d" not in text and "2026-10-16" in text
+
+
+def test_persona_dates_accept_both_directions():
+    cols = ["USERLOGIN", "HIREDATE"]
+    assert wbk.normalize_persona({"USERLOGIN": "test-pre", "HIREDATE": "+7d"}, cols, set())
+    assert wbk.normalize_persona({"USERLOGIN": "test-new", "HIREDATE": "-10d"}, cols, set())
+    with pytest.raises(ValueError, match="days ahead"):
+        wbk.normalize_persona({"USERLOGIN": "test-bad", "HIREDATE": "7d"}, cols, set())
+
+
 def test_next_id():
     assert next_id({"TC-009", "TC-010", "X"}) == "TC-011"
     assert next_id(set()) == "TC-001"
