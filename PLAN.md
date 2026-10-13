@@ -208,7 +208,7 @@ write it back as a comment with its fill, or editing in the app would silently d
 
 **Personas sheet** — UPPERCASE columns are the OIM roster's own names and formats and
 are exported as the test roster CSV (W1); lowercase columns are notes. `in_roster = N`
-keeps a persona out on purpose. `HIREDATE` `-10d` = 10 days before today.
+keeps a persona out on purpose. `HIREDATE` `-10d` = 10 days before today, `+7d` = 7 days ahead (pre-boarding).
 
 Formats, from the shape of the OIM file and `region.csv` (structure only, never
 records). `ACTION` is **not read by the chatbot** (Ben, 2026-10-09), so Personas
