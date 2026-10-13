@@ -1,4 +1,5 @@
 import json
+import os
 import time
 
 import httpx
@@ -437,7 +438,8 @@ def test_the_roster_is_written_on_every_change(roster_client, seed_bytes):
     assert _lines(path)[1:] == []  # at startup: a header and no personas yet
     imported(c, seed_bytes)
     assert _lines(path) == c.get(f"{B}/api/export/test-roster.csv", headers=ADMIN).text.splitlines()
-    assert stat.S_IMODE(path.stat().st_mode) == 0o644  # the chatbot API is another uid
+    if os.name != "nt":  # Windows has no POSIX modes
+        assert stat.S_IMODE(path.stat().st_mode) == 0o644  # the chatbot API is another uid
     assert "-10d" in path.read_text()  # relative: the chatbot resolves it daily
     c.post(f"{B}/api/personas", headers=ADMIN, json={"USERLOGIN": "test-zz", "COUNTRY": "US"})
     assert any(line.startswith("test-zz,") for line in _lines(path))

@@ -64,7 +64,7 @@ const I = {
   down: svg('<path d="M4 6l4 4 4-4"/>'), close: svg('<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>'), plus: svg('<path d="M8 3v10M3 8h10"/>'),
   user: svg('<circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.8-2.6 2.7-3.8 5-3.8s4.2 1.2 5 3.8"/>'), trash: svg('<path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5"/>'),
   tests: svg('<path d="M2.5 4l1.5 1.5L6.5 3M2.5 10l1.5 1.5L6.5 9M9 4.5h4.5M9 10.5h4.5"/>'), set: svg('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.5h11M6.5 6.5v7"/>'),
-  chat: svg('<path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/>'), log: svg('<path d="M3 4h10M3 8h10M3 12h6"/>'), search: svg('<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/>'),
+  chat: svg('<path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/>'), log: svg('<path d="M3 4h10M3 8h10M3 12h6"/>'), up: svg('<path d="M8 13V3.5M4 7.5l4-4 4 4"/>'),
   more: svg('<circle cx="3.5" cy="8" r=".8" fill="currentColor"/><circle cx="8" cy="8" r=".8" fill="currentColor"/><circle cx="12.5" cy="8" r=".8" fill="currentColor"/>'),
 };
 const LABEL = { pass: "Pass", fail: "Fail", error: "Error", none: "Not run" };
@@ -103,7 +103,7 @@ function useEscape(fn, on = true) {
 function Header({ view, setView, info, latest, active }) {
   const tabs = [["tests", "Tests", I.tests], ["play", "Playground", I.chat], ["set", "Test set", I.set]];
   let chip = null;
-  if (active) chip = html`<button class="runchip" onClick=${() => setView("tests")} title="A run is in progress"><i class="dot live"></i><span>Running ${runLabel(active).replace("Run ", "").replace("Re-run ", "re-run ")}</span><b>${active.done || 0}/${active.total || "…"}</b></button>`;
+  if (active) chip = html`<button class="runchip" onClick=${() => setView("tests")} title="A run is in progress"><span class="ring-spin"></span><span>Running ${runLabel(active).replace("Run ", "").replace("Re-run ", "re-run ")}</span><b>${active.done || 0}/${active.total || "…"}</b></button>`;
   else if (latest) chip = html`<button class="runchip" onClick=${() => setView("tests")} title=${`Latest full run, ${fmtTime(latest.created_at)}`}><i class="dot ok"></i><span>Run #${latest.id}</span><b>${fmtPct(latest.overview && latest.overview.pass_rate)}</b><span class="faint">${fmtClock(latest.created_at)}</span></button>`;
   const who = info.user.username;
   return html`<header class="top">
@@ -167,6 +167,62 @@ function RunControls({ info, cases, results, active, onStart, onCancel }) {
     ${blocked && html`<span class="banner warn">${blocked}</span>`}
     ${err && html`<span class="banner err">${err}</span>`}
   </div>`;
+}
+
+// ------------------------------------------------------------------ pass summary (H1; the L1 spinner while running)
+function Ring({ c, spin, children }) {
+  const size = 136, w = 14, cx = size / 2, r = cx - w / 2 - 1, C = 2 * Math.PI * r;
+  const n = spin ? 0 : c.pass + c.fail + c.error;
+  let off = 0;
+  // pass / fail / error as rounded arcs with a gap between them
+  const segs = [["pass", "good"], ["fail", "bad"], ["error", "warn"]].map(([k, col]) => {
+    const v = n ? c[k] : 0;
+    if (!v) return null;
+    const whole = v === n, len = (v / n) * C, cut = whole ? 0 : Math.min(len * 0.5, 3 + w);
+    const el = html`<circle cx=${cx} cy=${cx} r=${r} fill="none" stroke=${`var(--${col})`} stroke-width=${w} stroke-linecap=${whole ? "butt" : "round"}
+      stroke-dasharray=${`${Math.max(0.01, len - cut)} ${C}`} stroke-dashoffset=${-(off + cut / 2)} transform=${`rotate(-90 ${cx} ${cx})`}><title>${v} ${LABEL[k].toLowerCase()}</title></circle>`;
+    off += len;
+    return el;
+  });
+  return html`<div class="ring"><svg width=${size} height=${size} aria-hidden="true">
+    <circle cx=${cx} cy=${cx} r=${r} fill="none" stroke="var(--surface2)" stroke-width=${w} />
+    ${spin ? html`<g class="spinring"><circle cx=${cx} cy=${cx} r=${r} fill="none" stroke="var(--accent)" stroke-width=${w} stroke-linecap="round" stroke-dasharray=${`${C * 0.24} ${C}`} /></g>` : segs}
+  </svg><div class="mid"><div>${children}</div></div></div>`;
+}
+
+function Counts({ c, fresh, onPick }) {
+  const item = (k, n, label, extra) => onPick
+    ? html`<button class=${`cnt ${k}`} onClick=${() => onPick(k)} title=${`Show only ${label}`}><i></i><b>${n}</b><span>${label}${extra}</span></button>`
+    : html`<span class=${`cnt ${k}`}><i></i><b>${n}</b><span>${label}${extra}</span></span>`;
+  return html`${item("pass", c.pass || 0, "passed", "")}${item("fail", c.fail || 0, "failed", fresh ? html` · <em>${fresh} new</em>` : "")}${item("error", c.error || 0, "didn't answer", "")}`;
+}
+
+function Summary({ run, live, delta, fresh, onPick, onCancel }) {
+  if (live) {
+    const done = live.done || 0, total = live.total || 0, c = live.counts || {};
+    const mins = (Date.now() - new Date(live.created_at).getTime()) / 60000;
+    const left = done && total > done && mins > 0 ? Math.max(1, Math.round((mins / done) * (total - done))) : null;
+    return html`<div class="card sum" aria-live="polite">
+      <${Ring} c=${c} spin><span class="rn">${done}<small> / ${total || "…"}</small></span><span class="rs">graded</span><//>
+      <div class="sum-r"><div class="sum-top"><${Counts} c=${c} /></div>
+        <div class="sum-bot"><span class="livehead"><span class="ring-spin"></span>${runLabel(live)} · ${live.status}</span>
+          <span class="mut" style="font-size:13px">Started ${fmtClock(live.created_at)} · ${(live.info || {}).concurrency || "?"} in flight${left ? ` · about ${pl(left, "min", "min")} left` : ""}</span>
+          <button class="btn sm danger" onClick=${onCancel}>Cancel run</button></div></div></div>`;
+  }
+  const ov = run.overview || {}, c = { pass: ov.passed || 0, fail: ov.failed || 0, error: ov.errored || 0 };
+  const going = LIVE.has(run.status);
+  return html`<div class="card sum">
+    <${Ring} c=${c}>${ov.pass_rate != null ? html`<span class="rn">${(ov.pass_rate * 100).toFixed(1)}<small>%</small></span><span class="rs">passed</span>`
+      : html`<span class="rn none">${going ? "Running…" : "—"}</span>${!going && html`<span class="rs">nothing judged</span>`}`}<//>
+    <div class="sum-r">
+      <div class="sum-top"><${Counts} c=${c} fresh=${fresh} onPick=${onPick} />
+        ${delta != null && html`<span class=${`delta ${delta <= -0.05 ? "down" : delta >= 0.05 ? "up" : "flat"}`}>${delta <= -0.05 ? "▼ " : delta >= 0.05 ? "▲ " : ""}${Math.abs(delta).toFixed(1)} pts vs #${run.baseline_run}</span>`}</div>
+      <div class="sum-bot">
+        <div class="fx"><span>Judged</span><b>${c.pass + c.fail}</b></div>
+        <div class="fx"><span>Median score</span><b>${ov.score_median != null ? ov.score_median.toFixed(2) : "—"}</b></div>
+        <div class="fx"><span>Latency p50</span><b>${fmtMs(ov.latency_p50_ms)}</b></div>
+        <div class="fx"><span>Latency p95</span><b>${fmtMs(ov.latency_p95_ms)}</b></div>
+      </div></div></div>`;
 }
 
 // ------------------------------------------------------------------ breakdown (C1)
@@ -291,6 +347,8 @@ function TestsView({ info, cases, runs, active, tick, refresh, openCase, tryInPl
     return () => { stop = true; clearTimeout(timer); };
   }, [shown, tick]);
   useEscape(useCallback(() => setSel(null), []), !!sel);
+  // a result filter picked for one run doesn't follow you to the next
+  useEffect(() => setF((x) => ({ ...x, f: "all" })), [shown]);
 
   const byCase = useMemo(() => {
     const m = {};
@@ -342,22 +400,12 @@ function TestsView({ info, cases, runs, active, tick, refresh, openCase, tryInPl
       </h2>
       ${!active && html`<${RunControls} info=${info} cases=${cases} results=${results} active=${null} onStart=${start} onCancel=${cancel} />`}
     </div>
-    ${active && html`<${RunControls} info=${info} cases=${cases} results=${results} active=${active} onStart=${start} onCancel=${cancel} />`}
+    ${active && active.id !== shown && html`<${RunControls} info=${info} cases=${cases} results=${results} active=${active} onStart=${start} onCancel=${cancel} />`}
     ${!run ? html`<div class="card empty">${cases.length ? html`Nothing has run yet. Choose what to run above, then <b>Run</b>.` : html`No test set yet. Open <b>Test set</b> and import the workbook.`}</div>` : html`
       ${run.error && html`<div class="banner err">${run.error}</div>`}
       ${["cancelled", "interrupted"].includes(run.status) && html`<div class="banner warn">This run was ${run.status} — the numbers cover the ${pl(rows.length, "case")} that finished.</div>`}
-      <div class="card banner-card">
-        <div><div class="bigcap">Pass rate · ${runLabel(run).toLowerCase()}</div>
-          ${ov.pass_rate != null ? html`<p class="big">${(ov.pass_rate * 100).toFixed(1)}<small>%</small></p>` : html`<p class="big none">${LIVE.has(run.status) ? "Running…" : "No judged cases"}</p>`}
-          <div class="bigline"><${Status} s="fail" plain /><span>${ov.failed || 0} failed${regressions.size ? ` · ${regressions.size} new` : ""}</span><${Status} s="error" plain /><span>${ov.errored || 0} didn't answer</span>
-            ${delta != null && html`<span class="mut">${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} pts vs #${run.baseline_run}</span>`}</div></div>
-        <div class="facts">
-          <div><div class="k">Passed</div><div class="v">${ov.passed || 0}<span class="mut" style="font-size:14px"> of ${(ov.passed || 0) + (ov.failed || 0)}</span></div></div>
-          <div><div class="k">Failed</div><div class="v">${ov.failed || 0}</div></div>
-          <div><div class="k">Latency p50</div><div class="v">${fmtMs(ov.latency_p50_ms)}</div></div>
-          <div><div class="k">Latency p95</div><div class="v">${fmtMs(ov.latency_p95_ms)}</div></div>
-        </div>
-      </div>
+      <${Summary} run=${run} live=${active && active.id === run.id ? active : null} delta=${delta} fresh=${regressions.size}
+        onPick=${(k) => setF({ ...f, f: k })} onCancel=${cancel} />
       ${rrList.length > 0 && html`<div class="since">${I.rerun()}<span><b>Since run #${run.id}:</b> ${pl(rrList.length, "case")} re-run${nowPass ? `, ${nowPass} now ${nowPass === 1 ? "passes" : "pass"}` : ""}. The pass rate stays the run's own; re-run rows are marked below.</span></div>`}
       <${Breakdown} run=${run} />
       <div class="filters">
@@ -482,11 +530,13 @@ function SetView({ info, cases, personas, columns, regionOf, active, refresh, op
         <span class="grow"></span><button class="btn ghost danger" onClick=${() => setConfirm(true)} aria-label="Delete">${I.trash()}</button></div>`}
   </div>`;
   return html`<main>
+    <div class="setcards" role="tablist" aria-label="Test set">
+      ${[["cases", "Cases", cases.length, `${cases.filter((c) => c.status === "ready").length} ready · ${cases.filter((c) => c.review).length} to review`, I.set],
+        ["personas", "Personas", personas.length, `${personas.filter((p) => String(p.in_roster || "Y").trim().toUpperCase() !== "N").length} in the roster · ${personas.filter((p) => regionOf(p)).length} with a KB`, I.user]]
+        .map(([k, label, n, sub, ic]) => html`<button role="tab" aria-selected=${tab === k} aria-pressed=${tab === k} onClick=${() => { setTab(k); setSel(null); setQ(""); }}>
+          <span class="ico">${ic()}</span><b>${label}</b><span class="n">${n}</span><small>${sub}</small></button>`)}
+    </div>
     <div class="ts-head">
-      <div class="subtabs">
-        <button aria-pressed=${tab === "cases"} onClick=${() => { setTab("cases"); setSel(null); setQ(""); }}>Cases <span class="n">${cases.length}</span></button>
-        <button aria-pressed=${tab === "personas"} onClick=${() => { setTab("personas"); setSel(null); setQ(""); }}>Personas <span class="n">${personas.length}</span></button>
-      </div>
       <input class="input" type="search" placeholder=${`Search ${tab}`} value=${q} onInput=${(e) => setQ(e.target.value)} aria-label="Search" />
       <span class="grow"></span>
       <button class="btn pri" onClick=${() => openCase(null)}>${I.plus()} New case</button>
@@ -784,87 +834,124 @@ function PersonaWizard({ init, columns, personas, regionOf, regions, onClose, on
     err=${err} saving=${saving} onSave=${save} onClose=${onClose} saveLabel=${editing ? "Save persona" : "Create persona"} canNext=${canNext} />`;
 }
 
-// ------------------------------------------------------------------ playground (G2)
-function Playground({ info, cases, personas, regionOf, preset, clearPreset }) {
+// ------------------------------------------------------------------ playground (Y2 banner, C1 messenger)
+const isNo = (v) => String(v || "").trim().toUpperCase() === "N";
+// days since a hire date: "2021-03-04", or "-10d" meaning ten days ago
+function daysSince(v) {
+  const m = /^-(\d+)d$/.exec(String(v || "").trim());
+  if (m) return Number(m[1]);
+  const d = v ? new Date(v) : null;
+  return d && !isNaN(d) ? Math.round((Date.now() - d.getTime()) / 864e5) : null;
+}
+const tenure = (d) => (d < 60 ? pl(d, "day") : d < 365 ? pl(Math.round(d / 30), "month") : `${Math.floor(d / 365)} y ${Math.floor((d % 365) / 30)} m`);
+const PLABEL = { USERLOGIN: "Login", FIRSTNAME: "First name", LASTNAME: "Last name", PREFERREDNAME: "Preferred name", EMAIL: "Email", EMPNO: "Employee no.",
+  BUSINESSTITLE: "Title", USERTYPE: "Type", DEPARTMENT: "Department", BUSINESSUNIT: "Business unit", DIVISION: "Division", COUNTRY: "Country", STATE: "Province / state",
+  LOCATION: "Location", in_roster: "In the roster", HIREDATE: "Hired", REHIREDATE: "Rehired", LOA: "Leave", MANAGERLOGIN: "Manager login", MGRLVL1: "Manager", MGRLVL2: "Skip-level" };
+const MONO_F = new Set(["USERLOGIN", "EMAIL", "EMPNO", "HIREDATE", "REHIREDATE", "MANAGERLOGIN", "MGRLVL1", "MGRLVL2"]);
+const PGROUPS = [["Who", ["USERLOGIN", "FIRSTNAME", "LASTNAME", "PREFERREDNAME", "EMAIL", "EMPNO"]], ["Work", ["BUSINESSTITLE", "USERTYPE", "DEPARTMENT", "BUSINESSUNIT", "DIVISION"]],
+  ["Where", ["COUNTRY", "STATE", "LOCATION", "in_roster"]], ["Dates", ["HIREDATE", "REHIREDATE", "LOA"]], ["Reports to", ["MANAGERLOGIN", "MGRLVL1", "MGRLVL2"]]];
+
+function PersonaBanner({ p, persona, personas, regionOf, onPick }) {
+  const [more, setMore] = useState(false);
+  if (!p) return html`<div class="pbanner"><div class="r1"><b>${personas.length ? `Unknown persona ${persona}` : "No personas yet"}</b>
+    ${personas.length > 0 && html`<select class="input" value=${persona} onChange=${(e) => onPick(e.target.value)} aria-label="Persona">${personas.map((x) => html`<option value=${x.USERLOGIN}>${x.USERLOGIN}</option>`)}</select>`}
+    ${!personas.length && html`<span class="mut">Add one in Test set first.</span>`}</div></div>`;
+  const name = `${p.FIRSTNAME || ""} ${p.LASTNAME || ""}`.trim();
+  const kb = regionOf(p), h = daysSince(p.REHIREDATE || p.HIREDATE), reports = personas.filter((x) => x.MGRLVL1 === p.USERLOGIN).length;
+  const known = new Set(PGROUPS.flatMap(([, ks]) => ks).concat("purpose"));
+  const rest = Object.keys(p).filter((k) => !known.has(k) && !k.startsWith("_") && p[k] !== "" && p[k] != null);
+  const groups = [...PGROUPS, ...(rest.length ? [["Other", rest]] : [])];
+  return html`<div class="pbanner">
+    <div class="r1"><span class="av">${((p.FIRSTNAME || p.USERLOGIN.slice(5))[0] || "") + ((p.LASTNAME || "")[0] || "")}</span>${name && html`<b>${name}</b>`}<span class="mono">${p.USERLOGIN}</span>
+      <select class="input" value=${persona} onChange=${(e) => onPick(e.target.value)} aria-label="Persona">${personas.map((x) => html`<option value=${x.USERLOGIN}>${x.USERLOGIN}</option>`)}</select>
+      <button class="btn sm more" aria-expanded=${more} onClick=${() => setMore(!more)}>${more ? "Hide details" : "All details"}</button></div>
+    <div class="chips">
+      ${kb ? html`<span class="fc kb">KB <b class="mono">${kb}</b></span>` : html`<span class="fc warn">No knowledge base</span>`}
+      ${isNo(p.in_roster) && html`<span class="fc bad">Not in the roster</span>`}
+      ${p.BUSINESSTITLE && html`<span class="fc">${p.BUSINESSTITLE}</span>`}
+      ${(p.LOCATION || p.COUNTRY) && html`<span class="fc">${p.LOCATION || p.COUNTRY}${p.STATE ? ` · ${p.STATE}` : ""}</span>`}
+      ${p.USERTYPE && html`<span class=${`fc${/contract/i.test(p.USERTYPE) ? " warn" : ""}`}>${p.USERTYPE}</span>`}
+      ${h != null && h >= 0 && html`<span class=${`fc${h <= 30 ? " good" : ""}`}>${h <= 30 ? "New hire · " : ""}${p.REHIREDATE ? "rehired " : ""}${tenure(h)}</span>`}
+      ${p.LOA && html`<span class="fc warn">On leave</span>`}
+      ${reports > 0 && html`<span class="fc">Manages <b>${reports}</b></span>`}
+    </div>
+    ${more && html`<div class="drawer">${p.purpose && html`<div class="fgroup" style="grid-column:1/-1"><h5>Purpose</h5><div style="font-size:13px">${p.purpose}</div></div>`}
+      ${groups.map(([title, ks]) => html`<div class="fgroup"><h5>${title}</h5><dl>${ks.map((k) => html`<dt title=${k}>${PLABEL[k] || k}</dt><dd class=${MONO_F.has(k) && p[k] ? "mono" : ""}>${k === "in_roster" ? (isNo(p[k]) ? "No" : "Yes") : p[k] || html`<span class="faint">—</span>`}</dd>`)}</dl></div>`)}</div>`}
+  </div>`;
+}
+
+// "[1]" in an answer becomes a small citation mark; a trailing References block is dropped when the sources are listed
+function answerBody(m) {
+  const t = m.sources && m.sources.length ? m.text.split(/\n\s*References\s*\n/)[0] : m.text;
+  return t.split(/(\[\d+\])/).map((x) => (/^\[\d+\]$/.test(x) ? html`<span class="cite">${x.slice(1, -1)}</span>` : x));
+}
+
+function Playground({ info, personas, regionOf, preset, clearPreset }) {
   const [persona, setPersona] = useState(() => (personas[0] || {}).USERLOGIN || "");
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState("");
-  const [q, setQ] = useState("");
   const [sending, setSending] = useState(false);
-  const box = useRef(null), side = useRef(null), list = useRef(null), input = useRef(null);
+  const box = useRef(null), list = useRef(null), input = useRef(null), turn = useRef(0);
   // the message box grows with what's typed, and shrinks back when it's sent or replaced
-  useLayoutEffect(() => { const el = input.current; if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight + 2}px`; } }, [text]);
+  useLayoutEffect(() => { const el = input.current; if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } }, [text]);
   useEffect(() => { if (!personas.some((p) => p.USERLOGIN === persona) && personas.length) setPersona(personas[0].USERLOGIN); }, [personas]);
+  // a new persona, or a case brought over from the results, starts a fresh conversation
+  const pick = (login) => { if (login !== persona) { setPersona(login); setMsgs([]); setSending(false); turn.current++; } };
   useEffect(() => {
     if (!preset) return;
-    if (preset.persona !== persona) { setPersona(preset.persona); setMsgs([]); }
+    setPersona(preset.persona); setMsgs([]); setSending(false); turn.current++;
     setText(preset.text); clearPreset();
     setTimeout(() => input.current && input.current.focus(), 0);
   }, [preset]);
-  // The chat fits the window: it grows with the conversation, stops at the bottom edge, then scrolls inside.
+  // The chat fills the window down to its bottom edge; the messages scroll inside it.
   const fit = useCallback(() => {
-    for (const el of [box.current, side.current]) if (el) el.style.maxHeight = `${Math.max(360, window.innerHeight - el.getBoundingClientRect().top - 20)}px`;
+    if (box.current) box.current.style.height = `${Math.max(420, window.innerHeight - box.current.getBoundingClientRect().top - window.scrollY - 20)}px`;
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
   }, []);
-  useLayoutEffect(fit, [msgs, sending, q]);
+  useLayoutEffect(fit, [msgs, sending, persona]);
   useEffect(() => { window.addEventListener("resize", fit); return () => window.removeEventListener("resize", fit); }, []);
+  const p = personas.find((x) => x.USERLOGIN === persona);
+  const kb = p ? regionOf(p) : null;
   const send = async () => {
     const say = text.trim();
-    if (!say || sending || !persona) return;
+    if (!say || sending || !p) return;
+    const mine = turn.current;
     setSending(true);
     const history = msgs.filter((m) => !m.error).map((m) => ({ role: m.role, text: m.text })).slice(-20);
     setMsgs((m) => [...m, { role: "user", text: say }]);
     setText("");
+    let reply;
     try {
       const r = await api("playground", { method: "POST", body: { persona, text: say, history } });
-      setMsgs((m) => [...m, { role: "assistant", text: r.answer, signal: r.signal, sources: r.sources || [], latency: r.latency_ms }]);
-    } catch (e) {
-      setMsgs((m) => [...m, { role: "assistant", text: e.message, error: true }]);
-    } finally { setSending(false); }
+      reply = { role: "assistant", text: r.answer, signal: r.signal, sources: r.sources || [], latency: r.latency_ms };
+    } catch (e) { reply = { role: "assistant", text: e.message, error: true }; }
+    // an answer to a conversation that has since been replaced is dropped
+    if (turn.current !== mine) return;
+    setMsgs((m) => [...m, reply]); setSending(false);
   };
-  const ql = q.trim().toLowerCase();
-  const hits = ql ? cases.filter((c) => [c.id, c.question, c.category, c.persona].join(" ").toLowerCase().includes(ql)).sort((a, b) => (a.status === "ready" ? 0 : 1) - (b.status === "ready" ? 0 : 1)).slice(0, 8) : [];
-  const load = (c) => {
-    if (c.persona !== persona) { setPersona(c.persona); setMsgs([]); }
-    setText(c.question); setQ("");
-    setTimeout(() => input.current && input.current.focus(), 0);
-  };
-  const p = personas.find((x) => x.USERLOGIN === persona);
-  const known = p || !persona;
+  const initials = p ? ((p.FIRSTNAME || p.USERLOGIN.slice(5))[0] || "") + ((p.LASTNAME || "")[0] || "") : "?";
   return html`<main class="play">
     ${!info.chatbot.ready && html`<div class="banner err">The chatbot isn't configured (CHATBOT_URL, CHATBOT_TOKEN), so nothing can be asked yet.</div>`}
-    <div class="pg">
-      <section class="chatbox" ref=${box}>
-        <div class="msgs" ref=${list} aria-live="polite">
-          ${!msgs.length && !sending && html`<div class="pg-empty">${I.chat()}<b>Ask as <span class="mono">${persona || "a persona"}</span></b><span>Type a question, or load one from the test set with Search.</span></div>`}
-          ${msgs.map((m, i) => html`<div key=${i} class=${`msg ${m.role}${m.error ? " error" : ""}`}>${m.text}</div>
-            ${m.role === "assistant" && !m.error && html`<div class="msg-meta"><span>${fmtMs(m.latency)}</span><span>signal ${m.signal}</span>
-              ${m.sources.filter((s) => s.cited).map((s) => html`<span title=${s.path || s.title || ""}>[${s.n}] <span class="kb${s.region && s.region !== regionOf(p || {}) ? " leak" : ""}">${s.region || "—"}</span></span>`)}
-              ${!m.sources.length && html`<span>no sources</span>`}</div>`}`)}
-          ${sending && html`<div class="msg assistant typing" aria-label="Answering"><i></i><i></i><i></i></div>`}
-        </div>
-        <div class="compose">
-          <textarea class="input" rows="1" ref=${input} placeholder=${`Ask as ${persona || "…"}`} value=${text} aria-label="Message"
-            onInput=${(e) => setText(e.target.value)}
-            onKeyDown=${(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}></textarea>
-          <button class="btn pri" disabled=${sending || !text.trim() || !persona || !known || !info.chatbot.ready} onClick=${send}>Send</button>
-        </div>
-        <div class="pg-note">Unjudged · not saved${info.chatbot.history ? " · the conversation is sent with each message" : " · each message is asked fresh until chatbot work order W3"}</div>
-      </section>
-      <aside class="pg-side" ref=${side}>
-        <${Field} label="Persona" hint=${msgs.length ? "Changing it starts a new conversation." : ""}><select class="input" value=${persona} onChange=${(e) => { setPersona(e.target.value); setMsgs([]); }}>
-          ${personas.map((x) => html`<option value=${x.USERLOGIN}>${x.USERLOGIN}</option>`)}</select><//>
-        <${PersonaCard} p=${p} region=${p ? regionOf(p) : null} />
-        <div class="field">Load a test case
-          <div class="combo"><span class="combo-ic">${I.search()}</span><input class="input" type="search" placeholder="Search test cases" value=${q} onInput=${(e) => setQ(e.target.value)} aria-label="Search test cases" autocomplete="off" /></div>
-          ${ql && html`<div class="hits">${hits.map((c) => html`<button class="hit" onClick=${() => load(c)}><span class="mono hid">${c.id} · ${c.persona}${c.status !== "ready" ? ` · ${c.status}` : ""}</span><span>${c.question}</span></button>`)}
-            ${!hits.length && html`<div class="hit none">No case matches.</div>`}</div>`}
-          <span class="hint">Picking one sets its persona and puts its question in the box; nothing is sent until you press Send.</span>
-        </div>
-        <span class="grow"></span>
-        <button class="btn" disabled=${!msgs.length && !text} onClick=${() => { setMsgs([]); setText(""); }}>${I.plus()} New conversation</button>
-      </aside>
-    </div>
+    <div class="pgw"><section class="chatbox" ref=${box}>
+      <${PersonaBanner} p=${p} persona=${persona} personas=${personas} regionOf=${regionOf} onPick=${pick} />
+      <div class="msgs" ref=${list} aria-live="polite">
+        ${!msgs.length && !sending && html`<div class="pg-empty">${I.chat()}<b>Ask as ${p ? `${p.FIRSTNAME || ""} ${p.LASTNAME || ""}`.trim() || p.USERLOGIN : "a persona"}</b>
+          ${p && html`<span>The chatbot answers as if <span class="mono">${p.USERLOGIN}</span> asked. Changing persona starts over.</span>`}</div>`}
+        ${msgs.map((m, i) => m.role === "user"
+          ? html`<div key=${i} class="mrow me"><span class="av">${initials}</span><div class="mstack"><div class="bub">${m.text}</div></div></div>`
+          : html`<div key=${i} class="mrow bot"><span class="av bot">HR</span><div class="mstack"><div class=${`bub${m.error ? " error" : ""}`}>${m.error ? m.text : answerBody(m)}</div>
+              ${!m.error && html`<div class="mmeta"><span>${fmtMs(m.latency)}</span>${m.signal && html`<span class=${`sig ${m.signal === "ok" ? "ok" : "low"}`}><i></i>${m.signal === "ok" ? "signal ok" : m.signal.replace(/_/g, " ")}</span>`}
+                ${m.sources.filter((s) => s.cited).map((s) => html`<span class=${`ref${s.region && kb && s.region !== kb ? " leak" : ""}`} title=${`${s.region || "—"} · ${s.path || s.title || ""}`}>[${s.n}] ${String(s.path || s.title || s.region || "").split("/").pop()}</span>`)}
+                ${!m.sources.length && html`<span>no sources</span>`}</div>`}</div></div>`)}
+        ${sending && html`<div class="mrow bot"><span class="av bot">HR</span><div class="mstack"><div class="bub"><span class="typing" aria-label="Answering"><i></i><i></i><i></i></span></div></div></div>`}
+      </div>
+      <div class="compose">
+        <textarea rows="1" ref=${input} placeholder=${p ? `Ask as ${p.FIRSTNAME || p.USERLOGIN}…` : "Pick a persona first"} value=${text} aria-label="Message"
+          onInput=${(e) => setText(e.target.value)}
+          onKeyDown=${(e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } }}></textarea>
+        <button class="send" aria-label="Send" disabled=${sending || !text.trim() || !p || !info.chatbot.ready} onClick=${send}>${I.up()}</button>
+      </div>
+    </section></div>
   </main>`;
 }
 
@@ -891,7 +978,8 @@ function App() {
     try {
       const [s, c, p, r] = await Promise.all([api("state"), api("cases"), api("personas"), api("runs")]);
       setInfo(s); setCases(c.cases); setPersonas(p.personas); setColumns(p.columns); setRuns(r.runs); setErr("");
-      const full = r.runs.find((x) => isFull(x) && !LIVE.has(x.status));
+      // the header shows the newest complete full run, the same one the next run is compared with
+      const full = r.runs.find((x) => isFull(x) && x.status === "done");
       setLatest(full ? await api(`runs/${full.id}`) : null);
       setActive(s.active_run ? await api(`runs/${s.active_run}`) : null);
     } catch (e) { setErr(e.message); }
@@ -931,7 +1019,7 @@ function App() {
       rerun=${rerun} rerunId=${rerunId}
       openCase=${(c) => setModal({ kind: "case", init: c })}
       tryInPlayground=${(persona, text) => { setPreset({ persona, text }); go("play"); }} />`}
-    ${view === "play" && html`<${Playground} info=${info} cases=${cases} personas=${personas} regionOf=${regionOf} preset=${preset} clearPreset=${() => setPreset(null)} />`}
+    ${view === "play" && html`<${Playground} info=${info} personas=${personas} regionOf=${regionOf} preset=${preset} clearPreset=${() => setPreset(null)} />`}
     ${view === "set" && html`<${SetView} info=${info} cases=${cases} personas=${personas} columns=${columns} regionOf=${regionOf} active=${active} refresh=${refresh} toast=${toast} rerun=${rerun}
       openCase=${(c, persona) => setModal({ kind: "case", init: c || { persona: persona || "" } })}
       openPersona=${(p) => setModal({ kind: "persona", init: p })} />`}

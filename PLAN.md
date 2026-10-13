@@ -160,15 +160,22 @@ region's document titles is acceptable.
 - **Re-running one case** is a one-case run: no audit, never a regression baseline. A
   full run's page overlays each case's newest re-run since, marked, and never folds it into
   the run's pass rate.
-- **The interface** (artifact rounds 1–3, Ben's picks 2026-10-12): cobalt + Geist
-  (self-hosted — the front door's CSP allows fonts from `'self'` only); a pill bar —
-  Tests · Playground · Test set · Logging (greyed, `TODO`) — with the latest run's result
-  on the right; the pass rate full size; By category and Audit folded by default, each
-  folding in place; results grouped by category with green / red rows and solid status
-  pills, the score as one dot per expected point, a Re-run button per case; adding or
-  editing a case or persona is a step-by-step wizard; the playground is chat beside a
-  persona panel. Results are never exported; Versions and the roster CSV sit under
-  **More** in the Test set.
+- **The interface** (artifact rounds 1–6, Ben's picks 2026-10-12): soft cards, Plus Jakarta
+  Sans with Geist Mono, a blue accent on cool greys, light and dark (self-hosted fonts — the
+  front door's CSP allows fonts from `'self'` only); a pill bar — Tests · Playground · Test
+  set · Logging (greyed, `TODO`) — with the latest run's result on the right, spinning while
+  a run goes. The pass summary is a short card: a ring with the rate inside, passed / failed /
+  didn't answer along the top (each filters the table), judged · median score · p50 · p95
+  underneath; while the shown run is going, the ring is a spinner with the live counts, time
+  left and Cancel. By category and Audit fold in place, folded by default; results grouped
+  by category with green / red rows and solid status pills, the score as one dot per expected
+  point, a Re-run button per case. The Test set opens on two outlined cards, Cases and
+  Personas, with counts; adding or editing either is a step-by-step wizard. The playground
+  is one chat: a persona banner (what the chatbot knows as chips, every field under **All
+  details**), bubbles with citations and sources, a pill composer. No test-case search there
+  — a case's **Try in playground** brings its question over and starts a fresh conversation,
+  as does changing persona. Results are never exported; Versions and the roster CSV sit
+  under **More** in the Test set.
 - **Not in v1**: the logging page; comparing runs across chatbot builds.
 
 ## Test-set format
