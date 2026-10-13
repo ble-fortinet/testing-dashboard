@@ -322,7 +322,7 @@ table.t tr.row.chosen td { background: var(--accent-soft); }
 .pbanner .r1 b { font-size: 16px; }
 .pbanner .r1 .mono { color: var(--mut); }
 .pbanner .r1 select { max-width: 220px; }
-.pbanner .more { margin-left: auto; }
+.pbanner .more { margin-left: auto; display: flex; gap: 6px; }
 .pbanner .drawer { background: var(--surface); border-radius: var(--r-sm); padding: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; max-height: 40vh; overflow: auto; }
 .av { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; font-weight: 750; font-size: 11.5px; flex: none; letter-spacing: .02em; text-transform: uppercase; }
 .av.bot { background: var(--fg); color: var(--bg); }

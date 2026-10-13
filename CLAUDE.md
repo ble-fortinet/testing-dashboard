@@ -38,8 +38,8 @@ the gate.
   `LLM__REQUEST_TIMEOUT`, `LLM__API_KEY`); a `JUDGE_*` value wins. `config.effective_env`.
 - **The static cache key is computed at startup** (`?v=` from file mtimes). Edit
   `static/` with a server running and the browser keeps the old file: restart it.
-- **Fonts are self-hosted** (`static/vendor/fonts`, OFL). The front door's CSP allows
-  fonts from `'self'` only; a Google Fonts link would silently fall back.
+- **Fonts are self-hosted** (`static/vendor/fonts`, OFL: Plus Jakarta Sans, Geist Mono). The
+  front door's CSP allows fonts from `'self'` only; a Google Fonts link would silently fall back.
 
 ## Testing
 

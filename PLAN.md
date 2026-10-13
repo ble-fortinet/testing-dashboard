@@ -5,13 +5,14 @@ changes the dashboard needs are in [`CHATBOT-WORK-ORDER.md`](CHATBOT-WORK-ORDER.
 
 ## Status — 2026-10-12
 
-Built to this plan in `src/tdash/`; the interface is the round-3 design Ben picked
-(below). **Verified:** 133 tests on Python 3.12 (ruff clean) against in-process fakes that
+Built to this plan in `src/tdash/`; the interface is the round-6 design Ben picked
+(below). **Verified:** 139 tests on Python 3.12 (ruff clean) against in-process fakes that
 speak the real wire formats; an end-to-end pass in a real browser against a fake chatbot
 and fake judge — import through the file picker → full run with live progress → per-case
 re-run → detail panel (keys ↑ ↓ Esc) → case and persona wizards with their validation →
-delete refusals → versions restore → exports → playground (search, send, error, long
-chat) → a ×3 category run cancelled mid-way → an unconfigured app — no console errors, no
+delete refusals → versions restore → exports → playground (send, error, long chat, every
+persona field, Clear, Try in playground from a case) → a full run's live spinner and Cancel
+→ a ×3 category run cancelled mid-way → an unconfigured app — no console errors, no
 sideways scroll at 390 and 1440 px, light and dark.
 **Not verified:** `docker build` (no daemon on the machine that built it), and anything
 against the real chatbot, the real judge, or real FortiPAM.
@@ -125,8 +126,9 @@ region's document titles is acceptable.
   columns are notes. `in_roster = N` keeps a persona out on purpose.
 - **Multi-turn is an unjudged playground**: pick a persona, chat, see answer, sources,
   signal and latency. Needs W3 for real context (history is sent only when
-  `CHATBOT_HISTORY` is on). No built-in starters (dropped 2026-10-12): **Search test
-  cases** loads a case's persona and question into the box, and nothing is sent until Send.
+  `CHATBOT_HISTORY` is on). No starters and no case search (both dropped 2026-10-12): a
+  case's **Try in playground** puts its persona and question in the box, and nothing is
+  sent until Send.
 - **Judge**: the internal `aicoding` endpoint (OpenAI-compatible, Ben 2026-10-09; if it
   turns out not to be, use `agentassist` as the chatbot does), temperature 0, **checklist grading** — each `expected` point is covered / missing / contradicted;
   score = covered ÷ total; any contradiction or `must_not` hit fails the case. Feedback
@@ -174,7 +176,7 @@ region's document titles is acceptable.
   is one chat: a persona banner (what the chatbot knows as chips, every field under **All
   details**), bubbles with citations and sources, a pill composer. No test-case search there
   — a case's **Try in playground** brings its question over and starts a fresh conversation,
-  as does changing persona. Results are never exported; Versions and the roster CSV sit
+  as do changing persona and **Clear**. Results are never exported; Versions and the roster CSV sit
   under **More** in the Test set.
 - **Not in v1**: the logging page; comparing runs across chatbot builds.
 

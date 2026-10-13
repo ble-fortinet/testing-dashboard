@@ -851,7 +851,7 @@ const MONO_F = new Set(["USERLOGIN", "EMAIL", "EMPNO", "HIREDATE", "REHIREDATE",
 const PGROUPS = [["Who", ["USERLOGIN", "FIRSTNAME", "LASTNAME", "PREFERREDNAME", "EMAIL", "EMPNO"]], ["Work", ["BUSINESSTITLE", "USERTYPE", "DEPARTMENT", "BUSINESSUNIT", "DIVISION"]],
   ["Where", ["COUNTRY", "STATE", "LOCATION", "in_roster"]], ["Dates", ["HIREDATE", "REHIREDATE", "LOA"]], ["Reports to", ["MANAGERLOGIN", "MGRLVL1", "MGRLVL2"]]];
 
-function PersonaBanner({ p, persona, personas, regionOf, onPick }) {
+function PersonaBanner({ p, persona, personas, regionOf, onPick, onClear }) {
   const [more, setMore] = useState(false);
   if (!p) return html`<div class="pbanner"><div class="r1"><b>${personas.length ? `Unknown persona ${persona}` : "No personas yet"}</b>
     ${personas.length > 0 && html`<select class="input" value=${persona} onChange=${(e) => onPick(e.target.value)} aria-label="Persona">${personas.map((x) => html`<option value=${x.USERLOGIN}>${x.USERLOGIN}</option>`)}</select>`}
@@ -864,7 +864,8 @@ function PersonaBanner({ p, persona, personas, regionOf, onPick }) {
   return html`<div class="pbanner">
     <div class="r1"><span class="av">${((p.FIRSTNAME || p.USERLOGIN.slice(5))[0] || "") + ((p.LASTNAME || "")[0] || "")}</span>${name && html`<b>${name}</b>`}<span class="mono">${p.USERLOGIN}</span>
       <select class="input" value=${persona} onChange=${(e) => onPick(e.target.value)} aria-label="Persona">${personas.map((x) => html`<option value=${x.USERLOGIN}>${x.USERLOGIN}</option>`)}</select>
-      <button class="btn sm more" aria-expanded=${more} onClick=${() => setMore(!more)}>${more ? "Hide details" : "All details"}</button></div>
+      <span class="more">${onClear && html`<button class="btn sm ghost" onClick=${onClear} title="Start a fresh conversation as this persona">Clear</button>`}
+        <button class="btn sm" aria-expanded=${more} onClick=${() => setMore(!more)}>${more ? "Hide details" : "All details"}</button></span></div>
     <div class="chips">
       ${kb ? html`<span class="fc kb">KB <b class="mono">${kb}</b></span>` : html`<span class="fc warn">No knowledge base</span>`}
       ${isNo(p.in_roster) && html`<span class="fc bad">Not in the roster</span>`}
@@ -933,7 +934,8 @@ function Playground({ info, personas, regionOf, preset, clearPreset }) {
   return html`<main class="play">
     ${!info.chatbot.ready && html`<div class="banner err">The chatbot isn't configured (CHATBOT_URL, CHATBOT_TOKEN), so nothing can be asked yet.</div>`}
     <div class="pgw"><section class="chatbox" ref=${box}>
-      <${PersonaBanner} p=${p} persona=${persona} personas=${personas} regionOf=${regionOf} onPick=${pick} />
+      <${PersonaBanner} p=${p} persona=${persona} personas=${personas} regionOf=${regionOf} onPick=${pick}
+        onClear=${msgs.length || sending ? () => { setMsgs([]); setSending(false); turn.current++; } : null} />
       <div class="msgs" ref=${list} aria-live="polite">
         ${!msgs.length && !sending && html`<div class="pg-empty">${I.chat()}<b>Ask as ${p ? `${p.FIRSTNAME || ""} ${p.LASTNAME || ""}`.trim() || p.USERLOGIN : "a persona"}</b>
           ${p && html`<span>The chatbot answers as if <span class="mono">${p.USERLOGIN}</span> asked. Changing persona starts over.</span>`}</div>`}
