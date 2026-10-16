@@ -12,10 +12,9 @@ import pytest
 from tdash.regions import region_for_persona
 from tdash.workbook import parse
 
-# A frozen copy of the seed workbook as of 2026-10-09. Tests pin its counts, so they must not
-# read test-set/hr-assist-test-set.xlsx, which Ben and HR keep editing.
+# A frozen copy of the seed workbook as of 2026-10-09. Tests pin its counts, so they read
+# this and never the live workbook, which Ben and HR keep editing.
 SEED = Path(__file__).resolve().parent / "fixtures" / "seed.xlsx"
-LIVE = Path(__file__).resolve().parent.parent / "test-set" / "hr-assist-test-set.xlsx"
 
 
 @pytest.fixture(scope="session")

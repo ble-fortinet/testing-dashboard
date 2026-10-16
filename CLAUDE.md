@@ -45,7 +45,6 @@ the gate.
 
 `test/conftest.py` has in-process fakes that speak the real wire formats (the chatbot's
 `/v1/query` and `/health`, an OpenAI-compatible judge). Tests read a **frozen copy** of the
-seed, `test/fixtures/seed.xlsx`, and pin its counts. Never point them at
-`test-set/hr-assist-test-set.xlsx`: Ben and HR edit that one, and only a loose "it still
-imports" test reads it.
+seed, `test/fixtures/seed.xlsx`, and pin its counts. The live workbook lives outside the
+repo, so no test reads it.
 The suite itself never touches the real chatbot or judge; one end-to-end pass did (2026-10-12, `PLAN.md` § TODO).

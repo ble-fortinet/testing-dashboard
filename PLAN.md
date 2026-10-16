@@ -110,9 +110,10 @@ region's document titles is acceptable.
   - Import a whole `.xlsx` → a diff preview (added / changed / removed / in-app edits
     this would revert) → apply. Every import kept as a version; rollback.
   - Export the current set, **in-app edits included**. Results are never exported (decided 2026-10-09: they stay in the app).
-  - **Seed: [`test-set/hr-assist-test-set.xlsx`](test-set/hr-assist-test-set.xlsx).**
-    Its format is § Test-set format below. **Ben edits the file directly from
-    2026-10-09** — change it in place, never regenerate it.
+  - **Seed:** the workbook lives outside the repo — Ben's working copy, imported and
+    exported through the app. Its format is § Test-set format below. **Ben edits the
+    file directly from 2026-10-09** — change it in place, never regenerate it. The
+    tests pin a frozen copy, `test/fixtures/seed.xlsx`.
 - **Cases are single-turn and judged.** `id` · `status` (ready / draft / off — only
   ready runs) · `category` · `tests` · `persona` · `question` · `expected` (points, one
   per line — not a full answer) · `must_not` · `sources` (cite / none / blank) ·

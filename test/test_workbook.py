@@ -49,15 +49,6 @@ def row(**kw) -> list:
 
 
 # ---------------------------------------------------------------- the seed (frozen copy in test/fixtures)
-def test_the_live_test_set_still_imports():
-    """Loose on purpose: the live file changes as HR fills it in. It must still import."""
-    from conftest import LIVE
-
-    out = parse(LIVE.read_bytes())
-    assert out["cases"] and out["personas"]
-    assert all(c["persona"].startswith("test-") for c in out["cases"])
-
-
 def test_seed_parses_cleanly(seed):
     assert len(seed["cases"]) == 75
     assert len(seed["personas"]) == 12
