@@ -1009,7 +1009,7 @@ function App() {
   const regionOf = useCallback((p) => {
     if (!info || !p) return null;
     if (String(p.in_roster || "Y").trim().toUpperCase() === "N") return null;
-    return info.regions[String(p.COUNTRY || "").trim().toUpperCase()] || null;
+    return info.regions[String(p.COUNTRY_CODE || p.COUNTRY || "").trim().toUpperCase()] || null;
   }, [info]);
   const rerunId = active && !isFull(active) && (active.params.ids || []).length === 1 ? active.params.ids[0] : null;
 

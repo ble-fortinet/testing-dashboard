@@ -123,8 +123,12 @@ region's document titles is acceptable.
 - **Red team** is its own category. Its expected answers are behavioural and need no
   HR input, so it runs hands-off and is where new adversarial cases go first.
 - **The Personas sheet is the test roster.** UPPERCASE columns use the OIM roster's own
-  names and formats; the dash exports them as the CSV the chatbot reads (W1). lowercase
-  columns are notes. `in_roster = N` keeps a persona out on purpose.
+  names and formats; the dash writes each under its headcount-report name, the CSV the
+  chatbot reads (W1, `workbook.roster_row`). A sheet column already named for the
+  headcount (`PERSON_TYPE`, `ENTITY_NAME`, `PROJECTED_END_DATE`, ...) wins. The login is
+  also the person number, so managers link by login and never to a real person; the
+  skip level is the manager's own manager, so `MGRLVL2` is informational.
+  lowercase columns are notes. `in_roster = N` keeps a persona out on purpose.
 - **Multi-turn is an unjudged playground**: pick a persona, chat, see answer, sources,
   signal and latency. Needs W3 for real context (history is sent only when
   `CHATBOT_HISTORY` is on). No starters and no case search (both dropped 2026-10-12): a
