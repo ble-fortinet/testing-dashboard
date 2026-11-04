@@ -57,7 +57,12 @@ HEAD_FILL = PatternFill("solid", fgColor="1F1F1F")
 HEAD_FONT = Font(bold=True, color="FFFFFF")
 WRAP = Alignment(wrap_text=True, vertical="top")
 THIN = Border(bottom=Side(style="thin", color="DDDDDD"))
-TEXT_COLUMNS = {"HIREDATE", "REHIREDATE", "EMPNO"}  # never let Excel turn these into numbers or dates
+TEXT_COLUMNS = {
+    "HIREDATE",
+    "REHIREDATE",
+    "PROJECTED_END_DATE",
+    "EMPNO",
+}  # never let Excel turn these into numbers or dates
 BULLET = re.compile(r"^\s*(?:[-•*·]|\d{1,2}[.)])\s+")
 PREFIX = re.compile(r"^\s*(ADD|CHECK)\s*[—–:-]*\s*", re.I)
 RELATIVE = re.compile(r"^([-+])(\d{1,4})d$")
@@ -456,30 +461,57 @@ def export(cases: list[dict], personas: list[dict], persona_columns: list[str], 
 
 
 # ---------------------------------------------------------------------- roster CSV
-def roster_columns(persona_columns: list[str]) -> list[str]:
-    """The roster's own columns are the UPPERCASE ones; lowercase columns are notes."""
-    return [c for c in persona_columns if c == c.upper() and any(ch.isalpha() for ch in c)]
+# The chatbot reads the headcount report's columns (hrai-report cleans it nightly). Personas
+# keep the sheet's columns; each is written under its headcount name here, and a sheet column
+# already named for the headcount wins.
+ROSTER_COLUMNS = [
+    "FIRST_NAME", "LAST_NAME", "PREFERRED_NAME", "PERSON_NUMBER", "USER_ID", "WORK_EMAIL",
+    "PERSON_TYPE", "ASSIGNMENT_CATEGORY", "ASSIGNMENT_STATUS", "LEGAL_ENTITY_SENIORITY_DATE",
+    "LEGAL_ENTITY_HIRE_DATE", "PROJECTED_END_DATE", "ENTITY_NAME", "BUSINESS_UNIT", "DEPARTMENT_TREE",
+    "BUSINESS_TITLE", "WORK_LOCATION", "COUNTRY_CODE", "STATE", "DIVISION", "MANAGER_PERSON_NUMBER",
+]  # fmt: skip
+SHEET_NAME = {
+    "FIRST_NAME": "FIRSTNAME", "LAST_NAME": "LASTNAME", "PREFERRED_NAME": "PREFERREDNAME",
+    "WORK_EMAIL": "EMAIL", "LEGAL_ENTITY_SENIORITY_DATE": "HIREDATE", "BUSINESS_UNIT": "BUSINESSUNIT",
+    "DEPARTMENT_TREE": "DEPARTMENT", "BUSINESS_TITLE": "BUSINESSTITLE", "WORK_LOCATION": "LOCATION",
+    "COUNTRY_CODE": "COUNTRY",
+}  # fmt: skip
+ROSTER_DATES = ("LEGAL_ENTITY_SENIORITY_DATE", "LEGAL_ENTITY_HIRE_DATE", "PROJECTED_END_DATE")
+CATEGORY = {"full-time": "Full Time Regular", "part-time": "Part Time Regular"}
 
 
-def roster_csv(
-    personas: list[dict], persona_columns: list[str], resolve_dates: bool = False, today: date | None = None
-) -> str:
-    cols = roster_columns(persona_columns)
+def roster_row(p: dict) -> dict:
+    """One persona as a headcount row. The login is also the person number: a real one is all
+    digits, so a test persona can never be mistaken for one, and managers link by login."""
+    login = p["USERLOGIN"]
+    usertype = str(p.get("USERTYPE") or "").strip().lower()
+    row = {c: str(p.get(c) or p.get(SHEET_NAME.get(c, ""), "") or "") for c in ROSTER_COLUMNS}
+    row["USER_ID"] = row["PERSON_NUMBER"] = login
+    row["PERSON_TYPE"] = row["PERSON_TYPE"] or ("Consultant No Entity" if usertype == "contractor" else "Employee")
+    row["ASSIGNMENT_CATEGORY"] = row["ASSIGNMENT_CATEGORY"] or CATEGORY.get(usertype, "")
+    row["ASSIGNMENT_STATUS"] = row["ASSIGNMENT_STATUS"] or (
+        "Leave - Paid" if str(p.get("LOA") or "").strip() else "Active - Payroll Eligible"
+    )
+    hired = row["LEGAL_ENTITY_SENIORITY_DATE"]
+    row["LEGAL_ENTITY_HIRE_DATE"] = row["LEGAL_ENTITY_HIRE_DATE"] or str(p.get("REHIREDATE") or "") or hired
+    row["MANAGER_PERSON_NUMBER"] = row["MANAGER_PERSON_NUMBER"] or str(p.get("MGRLVL1") or p.get("MANAGERLOGIN") or "")
+    return row
+
+
+def roster_csv(personas: list[dict], resolve_dates: bool = False, today: date | None = None) -> str:
     today = today or date.today()
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow(cols)
+    w.writerow(ROSTER_COLUMNS)
     for p in personas:
         if str(p.get("in_roster", "Y")).strip().upper() == "N":
             continue
-        row = []
-        for c in cols:
-            v = p.get(c, "") or ""
-            if resolve_dates and (m := RELATIVE.match(v)):
+        row = roster_row(p)
+        for c in ROSTER_DATES:
+            if resolve_dates and (m := RELATIVE.match(row[c])):
                 days = int(m.group(2)) * (-1 if m.group(1) == "-" else 1)
-                v = (today + timedelta(days=days)).isoformat()
-            row.append(v)
-        w.writerow(row)
+                row[c] = (today + timedelta(days=days)).isoformat()
+        w.writerow([row[c] for c in ROSTER_COLUMNS])
     return buf.getvalue()
 
 
@@ -503,7 +535,7 @@ def normalize_persona(raw: dict, columns: list[str], logins: set[str]) -> dict:
         raise ValueError("the login must start test- and use letters, digits and - only")
     if p.get("in_roster", "Y").upper() not in ("Y", "N", ""):
         raise ValueError("in_roster is Y or N")
-    for c in ("HIREDATE", "REHIREDATE"):
+    for c in ("HIREDATE", "REHIREDATE", *ROSTER_DATES):
         if p.get(c) and not DATE_OK.match(p[c]):
             raise ValueError(f"{c} is a date (2024-03-01), days ago (-10d) or days ahead (+7d)")
     for c in LOGIN_REFS:  # a manager chain may only point at other test personas

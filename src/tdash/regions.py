@@ -6,6 +6,7 @@ for it, so every cited document can be checked against it. Keep the two in step.
 _EMEA = frozenset(
     {
         "AE",
+        "AL",
         "AT",
         "AZ",
         "BA",
@@ -100,7 +101,7 @@ def region_for_persona(persona: dict) -> str | None:
     """None for a persona deliberately kept out of the roster: the chatbot finds no row, so no KB."""
     if str(persona.get("in_roster", "Y")).strip().upper() == "N":
         return None
-    return region_for_country(persona.get("COUNTRY"))
+    return region_for_country(persona.get("COUNTRY_CODE") or persona.get("COUNTRY"))
 
 
 def country_map() -> dict[str, str]:

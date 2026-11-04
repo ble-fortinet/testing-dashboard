@@ -11,6 +11,7 @@ import contextlib
 import logging
 import os
 import secrets as pysecrets
+import threading
 import time
 from collections.abc import Mapping
 from contextlib import asynccontextmanager
@@ -76,8 +77,8 @@ def create_app(
         path = state["cfg"].test_roster_path
         if not path:
             return
-        text = workbook.roster_csv(store.personas(), store.persona_columns() or workbook.DEFAULT_PERSONA_COLUMNS)
-        tmp = f"{path}.tmp"
+        text = workbook.roster_csv(store.personas())
+        tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"  # two edits at once never share one
         try:
             with open(tmp, "w", encoding="utf-8", newline="") as f:
                 f.write(text)
@@ -329,7 +330,7 @@ def create_app(
 
     @r.get("/api/export/test-roster.csv")
     def api_roster(resolve_dates: bool = False):
-        text = workbook.roster_csv(store.personas(), store.persona_columns(), resolve_dates)
+        text = workbook.roster_csv(store.personas(), resolve_dates)
         return _download(text, "test-roster.csv", "text/csv; charset=utf-8")
 
     # ------------------------------------------------------------------ runs

@@ -252,18 +252,76 @@ def test_diff_reports_reverted_in_app_edits(seed):
 
 
 # ---------------------------------------------------------------- roster CSV
+def _roster(text: str) -> list[dict]:
+    import csv
+
+    return list(csv.DictReader(io.StringIO(text)))
+
+
 def test_roster_csv(seed):
-    text = roster_csv(seed["personas"], seed["persona_columns"])
-    head, *rows = text.strip().split("\n")
-    cols = head.split(",")
-    assert "USERLOGIN" in cols and "in_roster" not in cols and "purpose" not in cols
-    logins = [r.split(",")[0] for r in rows]
+    text = roster_csv(seed["personas"])
+    assert text.split("\n")[0].split(",") == wbk.ROSTER_COLUMNS  # the chatbot's 21, in order
+    rows = _roster(text)
+    logins = [r["USER_ID"] for r in rows]
     assert "test-unlisted" not in logins and len(logins) == 11
+    assert all(r["PERSON_NUMBER"] == r["USER_ID"] for r in rows)
+    assert {r["MANAGER_PERSON_NUMBER"] for r in rows} - {""} <= set(logins)  # links stay inside
     assert "-10d" in text
 
 
+def test_a_persona_becomes_a_headcount_row():
+    row = wbk.roster_row(
+        {
+            "USERLOGIN": "test-c",
+            "FIRSTNAME": "Cee",
+            "EMAIL": "test-c@fortinet.com",
+            "COUNTRY": "CA",
+            "LOCATION": "Canada Burnaby",
+            "USERTYPE": "Contractor",
+            "LOA": "LOA",
+            "HIREDATE": "2020-01-06",
+            "REHIREDATE": "-10d",
+            "MGRLVL1": "test-mgr",
+            "MANAGERLOGIN": "test-mgr",
+            "MGRLVL2": "test-top",
+            "EMPNO": "123",
+        }
+    )
+    assert row["FIRST_NAME"] == "Cee" and row["WORK_EMAIL"] == "test-c@fortinet.com"
+    assert (row["COUNTRY_CODE"], row["WORK_LOCATION"]) == ("CA", "Canada Burnaby")
+    assert (row["USER_ID"], row["PERSON_NUMBER"]) == ("test-c", "test-c")  # never a real number
+    assert row["PERSON_TYPE"] == "Consultant No Entity"  # a contractor caveat in the chatbot
+    assert row["ASSIGNMENT_STATUS"] == "Leave - Paid"
+    assert (row["LEGAL_ENTITY_SENIORITY_DATE"], row["LEGAL_ENTITY_HIRE_DATE"]) == ("2020-01-06", "-10d")
+    assert row["MANAGER_PERSON_NUMBER"] == "test-mgr"  # the skip level is derived from it
+    plain = wbk.roster_row({"USERLOGIN": "test-p", "USERTYPE": "Full-Time", "HIREDATE": "-5d"})
+    assert (plain["PERSON_TYPE"], plain["ASSIGNMENT_CATEGORY"]) == ("Employee", "Full Time Regular")
+    assert plain["ASSIGNMENT_STATUS"] == "Active - Payroll Eligible"
+    assert plain["LEGAL_ENTITY_HIRE_DATE"] == "-5d"  # no rehire: the hire date
+    assert plain["MANAGER_PERSON_NUMBER"] == "" and plain["PROJECTED_END_DATE"] == ""
+
+
+def test_a_sheet_column_named_for_the_headcount_wins():
+    row = wbk.roster_row(
+        {
+            "USERLOGIN": "test-v",
+            "USERTYPE": "Full-Time",
+            "PERSON_TYPE": "Vendor",
+            "ENTITY_NAME": "Fortinet Inc.",
+            "PROJECTED_END_DATE": "+30d",
+            "COUNTRY": "US",
+            "COUNTRY_CODE": "CA",
+        }
+    )
+    assert (row["PERSON_TYPE"], row["ENTITY_NAME"], row["COUNTRY_CODE"]) == ("Vendor", "Fortinet Inc.", "CA")
+    text = roster_csv(
+        [{"USERLOGIN": "test-v", "PROJECTED_END_DATE": "+30d"}], resolve_dates=True, today=date(2026, 10, 9)
+    )
+    assert _roster(text)[0]["PROJECTED_END_DATE"] == "2026-11-08"
+
+
 def test_roster_csv_resolves_relative_dates(seed):
-    text = roster_csv(seed["personas"], seed["persona_columns"], resolve_dates=True, today=date(2026, 10, 9))
+    text = roster_csv(seed["personas"], resolve_dates=True, today=date(2026, 10, 9))
     assert "-10d" not in text and "-5d" not in text
     assert "2026-09-29" in text and "2026-10-04" in text
 
@@ -271,7 +329,7 @@ def test_roster_csv_resolves_relative_dates(seed):
 def test_roster_csv_resolves_a_future_date(seed):
     """+Nd is a pre-boarding persona: it starts after today."""
     personas = [*seed["personas"], {"USERLOGIN": "test-pre", "HIREDATE": "+7d"}]
-    text = roster_csv(personas, seed["persona_columns"], resolve_dates=True, today=date(2026, 10, 9))
+    text = roster_csv(personas, resolve_dates=True, today=date(2026, 10, 9))
     assert "+7d" not in text and "2026-10-16" in text
 
 

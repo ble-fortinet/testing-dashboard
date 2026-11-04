@@ -442,12 +442,13 @@ def test_the_roster_is_written_on_every_change(roster_client, seed_bytes):
         assert stat.S_IMODE(path.stat().st_mode) == 0o644  # the chatbot API is another uid
     assert "-10d" in path.read_text()  # relative: the chatbot resolves it daily
     c.post(f"{B}/api/personas", headers=ADMIN, json={"USERLOGIN": "test-zz", "COUNTRY": "US"})
-    assert any(line.startswith("test-zz,") for line in _lines(path))
+    zz = ",test-zz,test-zz,"  # PERSON_NUMBER, USER_ID
+    assert any(zz in line for line in _lines(path))
     c.put(f"{B}/api/personas/test-zz", headers=ADMIN, json={"COUNTRY": "CA"})
-    row = next(line for line in _lines(path) if line.startswith("test-zz,"))
-    assert ",CA," in row or row.endswith(",CA")
+    row = next(line for line in _lines(path) if zz in line)
+    assert ",CA," in row
     c.delete(f"{B}/api/personas/test-zz", headers=ADMIN)
-    assert not any(line.startswith("test-zz,") for line in _lines(path))
+    assert not any(zz in line for line in _lines(path))
     first = c.get(f"{B}/api/versions", headers=ADMIN).json()["versions"][-1]["id"]
     c.post(f"{B}/api/versions/{first}/rollback", headers=ADMIN)
     assert _lines(path) == c.get(f"{B}/api/export/test-roster.csv", headers=ADMIN).text.splitlines()
